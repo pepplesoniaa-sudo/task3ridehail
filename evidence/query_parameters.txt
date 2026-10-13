@@ -1,0 +1,12 @@
+Real parameter values taken from the BULK data for db/queries/a1_a5_queries.sql (found by a read-only discovery query as ridehail_app/ridehail):
+A1 retry check (rider, key):               10000000-0000-0000-0000-000000004001 | bulk-1000
+A1 free rider for a new trip:              10000000-0000-0000-0000-000000002000 (no active trip)
+A2 a requested trip near the position:     40000000-0000-0000-0000-000000199850 at lat 6.485000, lon 3.395000
+A2 driver / vehicle:                       20000000-0000-0000-0000-000000000400 / 30000000-0000-0000-0000-000000000400
+A3 trip with 3 pings:                      40000000-0000-0000-0000-000000000100
+A3 assigned trip / its driver:             40000000-0000-0000-0000-000000199303 / 20000000-0000-0000-0000-000000000003
+A4 completed trip / rider / fare:          40000000-0000-0000-0000-000000001000 / ...004001 / 80000
+A4 cancelled trip with a 50000 fee / rider: 40000000-0000-0000-0000-000000000090 / ...002711
+A4 pending payment reference:              BULK-PRV-500
+A5 completed trip with no rider rating:    40000000-0000-0000-0000-000000001001 / rider ...001920
+History list rider (40 trips):             10000000-0000-0000-0000-000000000777

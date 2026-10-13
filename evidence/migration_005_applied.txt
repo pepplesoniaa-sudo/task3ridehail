@@ -1,0 +1,92 @@
+##### APPLY 005_money.sql (psql -1 -v ON_ERROR_STOP=1)
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+##### SHOW after 005
+                 List of relations
+ Schema |          Name          | Type  |  Owner   
+--------+------------------------+-------+----------
+ public | audit_log              | table | ridehail
+ public | driver                 | table | ridehail
+ public | fare_quote             | table | ridehail
+ public | payment                | table | ridehail
+ public | provider_event         | table | ridehail
+ public | refund                 | table | ridehail
+ public | rider                  | table | ridehail
+ public | setting                | table | ridehail
+ public | status_transition_rule | table | ridehail
+ public | support_admin          | table | ridehail
+ public | trip                   | table | ridehail
+ public | trip_status_history    | table | ridehail
+ public | vehicle                | table | ridehail
+(13 rows)
+
+      tbl       |               conname                | contype 
+----------------+--------------------------------------+---------
+ payment        | payment_amount_positive              | c
+ payment        | payment_currency_ngn                 | c
+ payment        | payment_failed_has_reason            | c
+ payment        | payment_pkey                         | p
+ payment        | payment_provider_reference_key       | u
+ payment        | payment_purpose_valid                | c
+ payment        | payment_status_valid                 | c
+ payment        | payment_succeeded_has_proof          | c
+ payment        | payment_trip_id_fkey                 | f
+ provider_event | provider_event_amount_positive       | c
+ provider_event | provider_event_currency_ngn          | c
+ provider_event | provider_event_money_pair            | c
+ provider_event | provider_event_outcome_valid         | c
+ provider_event | provider_event_pkey                  | p
+ provider_event | provider_event_processed_has_outcome | c
+ provider_event | provider_event_provider_event_id_key | u
+ provider_event | provider_event_type_valid            | c
+ refund         | refund_amount_positive               | c
+ refund         | refund_created_by_admin_fkey         | f
+ refund         | refund_currency_ngn                  | c
+ refund         | refund_payment_id_fkey               | f
+ refund         | refund_pkey                          | p
+ refund         | refund_provider_reference_key        | u
+ refund         | refund_reason_not_blank              | c
+(24 rows)
+
+      tbl       |           tgname           
+----------------+----------------------------
+ payment        | payment_enforce_rules
+ payment        | payment_write_audit
+ payment        | set_updated_at
+ provider_event | provider_event_guard
+ provider_event | provider_event_write_audit
+ provider_event | set_updated_at
+ refund         | append_only_guard
+ refund         | refund_enforce_total
+(8 rows)
+
+              index_name              |      tbl       
+--------------------------------------+----------------
+ payment_pkey                         | payment
+ payment_provider_reference_key       | payment
+ payment_one_live_per_purpose         | payment
+ provider_event_pkey                  | provider_event
+ provider_event_provider_event_id_key | provider_event
+ refund_pkey                          | refund
+ refund_provider_reference_key        | refund
+(7 rows)
+
+##### ROW COUNTS after 005
+payment 0
+refund 0
+provider_event 0

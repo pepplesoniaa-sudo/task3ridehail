@@ -1,0 +1,88 @@
+# Chapter 9. The proof: plans and the three rejected inserts
+@SRC Built from docs/04_hard_questions.md (question 7), evidence/plans_for_grader_after_016.txt, evidence/proofs_rejected_and_extra.txt, evidence/migration_016_measure_before.txt and evidence/migration_016_measure_after.txt.
+@P The first choice of index was made by reasoning (INFERRED). The choices were later measured with EXPLAIN (ANALYZE) on the built database (CONFIRMED). For the brief, the two heaviest queries are A2.1 (the heaviest read, and the only one whose cost grows with data it does not return) and the A1.3 trip insert (the heaviest statement of all, 7 to 31 ms depending on cache state, almost all of it in the two triggers trip_enforce_transition and trip_write_history). The second heaviest read is under a millisecond and uses a single index lookup, so it shows nothing the other plans do not.
+## The two heaviest queries
+@P A2.1 is the driver's app asking for open requests near its position. The query is served in part by the index trip_requested_created_at_idx ON trip (created_at) WHERE status = 'requested'. A partial index holds only waiting trips, and it stays small only after VACUUM: every trip that leaves requested leaves a dead entry in it until vacuum removes it. The A2.1 query does not read it in order and stop after 20 rows. The rectangle is on fare_quote, so Postgres must first find all waiting trips, then look up each trip's quote, filter by the rectangle, sort and cut to 20. With 401 waiting trips that is a bitmap scan, a sort and 401 lookups. It will not scale with a large waiting list: the cost grows with the number of waiting trips, not with the 20 rows returned.
+@P Measured on the real database (Stage 3, bulk set of 200,012 trips, 401 waiting, EXPLAIN (ANALYZE, BUFFERS), as ridehail_app; CONFIRMED). Right after the bulk load the query was 20.6 ms, 5,817 buffers. There was a Bitmap Heap Scan on trip (3,956 heap blocks) over a BitmapAnd of trip_one_active_per_driver (24,446 entries) and trip_requested_created_at_idx (9,354 entries) for only 401 real rows, then 401 Index Scan using fare_quote_pkey lookups, then Sort and Limit. No Seq Scan. The extra entries were dead index entries from 200,000 trips that had left requested. After VACUUM (ANALYZE) trip, payment the query was 3.4 ms, 1,713 buffers, entries 708 and 403, 45 heap blocks, with the same plan shape.
+@P The planner also used trip_one_active_per_driver (a partial index on the four active statuses) in the BitmapAnd. It is valid because status = 'requested' implies the four-status condition, but it is not the index the doc planned for, and it adds work. The 401 fare_quote lookups are the cost that remains, so the plan is a bitmap scan plus a sort plus 401 lookups, not a short ordered scan.
+@CODE
+ Limit  (cost=5169.00..5169.03 rows=12 width=64) (actual time=2.093..2.102 rows=20 loops=1)
+   ->  Sort  (cost=5169.00..5169.03 rows=12 width=64) (actual time=2.091..2.097 rows=20 loops=1)
+         ->  Nested Loop  (cost=2151.06..5168.78 rows=12 width=64) (actual time=1.341..2.030 rows=22 loops=1)
+               ->  Bitmap Heap Scan on trip t  (cost=2150.64..2154.65 rows=407 width=58) (actual time=0.291..0.557 rows=401 loops=1)
+                     Recheck Cond: ((status = ANY ('{requested,assigned,arrived,started}'::text[])) AND (status = 'requested'::text))
+                     ->  BitmapAnd  (cost=2150.64..2150.64 rows=1 width=0) (actual time=0.273..0.274 rows=0 loops=1)
+                           ->  Bitmap Index Scan on trip_one_active_per_driver  (cost=0.00..811.88 rows=720 width=0) (actual time=0.158..0.158 rows=761 loops=1)
+                           ->  Bitmap Index Scan on trip_requested_created_at_idx  (cost=0.00..1338.31 rows=407 width=0) (actual time=0.103..0.103 rows=453 loops=1)
+               ->  Index Scan using fare_quote_pkey on fare_quote q  (cost=0.42..7.41 rows=1 width=38) (actual time=0.003..0.003 rows=0 loops=401)
+                     Index Cond: (id = t.fare_quote_id)
+                     Filter: ((pickup_latitude >= 6.475) AND (pickup_latitude <= 6.495) AND (pickup_longitude >= 3.385) AND (pickup_longitude <= 3.405))
+                     Rows Removed by Filter: 1
+@END
+@P Re-measured (follow-up 2, after VACUUM (ANALYZE) of trip, payment and trip_status_history; CONFIRMED). A2.1: 3.46 ms, 1,722 buffers, same plan shape: Bitmap Heap Scan on trip (54 heap blocks) over a BitmapAnd of trip_one_active_per_driver (726 entries) and trip_requested_created_at_idx (420 entries), then 401 Index Scan using fare_quote_pkey, Sort, Limit. No Seq Scan. After migration 013 the same query measured 1.1 to 1.5 ms on two further runs, so single timings on this machine vary by a factor of about 3. The conclusion does not change: the cost is the 401 quote lookups and grows with the waiting list.
+@P A1.3 is the trip insert, the heaviest WRITE, and it includes the trigger work. It was rolled back. The plan shows an Insert on trip with a Result node, and then the trigger times. A plan does not list the indexes the insert has to maintain; the indexes of trip are trip_driver_history_idx, trip_fare_quote_id_key, trip_one_active_per_driver, trip_one_active_per_rider, trip_pkey, trip_requested_created_at_idx and trip_rider_history_idx. The insert is the heaviest statement of all, almost all of its time in the two triggers trip_enforce_transition and trip_write_history, against the four foreign key triggers that are each well under a millisecond.
+@CODE
+ Insert on trip  (cost=0.00..0.02 rows=0 width=0) (actual time=3.886..3.887 rows=0 loops=1)
+   Buffers: shared hit=161 read=1 dirtied=1
+   ->  Result  (cost=0.00..0.02 rows=1 width=364) (actual time=0.096..0.097 rows=1 loops=1)
+ Planning Time: 0.100 ms
+ Trigger for constraint trip_rider_id_fkey: time=0.180 calls=1
+ Trigger for constraint trip_driver_id_fkey: time=0.069 calls=1
+ Trigger for constraint trip_vehicle_belongs_to_driver: time=0.034 calls=1
+ Trigger for constraint trip_quote_belongs_to_rider: time=0.253 calls=1
+ Trigger trip_enforce_transition: time=2.292 calls=1
+ Trigger trip_write_history: time=3.337 calls=1
+ Execution Time: 7.875 ms
+@END
+## The three rejected inserts
+@P The three rejected inserts below, plus the two variants, each show a rule refusing a write on the built database, rolled back. The error messages are copied exactly.
+@TBL 9
+Rule | Statement in words | Error message | Constraint or trigger that refused it
+B1 | rider 5 already has an active trip (trip 09, requested) and requests another | duplicate key value violates unique constraint "trip_one_active_per_rider" | partial unique index trip_one_active_per_rider
+B7 | rating on a trip that is not completed (trip 12 is started), by its rider | a rating needs a completed trip (status is started) (B7) | trigger rating_enforce_rules
+B7 | a second rating by the same side (rider 1 already rated trip 01) | duplicate key value violates unique constraint "rating_one_per_role_per_trip" | unique constraint rating_one_per_role_per_trip
+B3 | payment with currency USD for trip 01 (rider 1, correct amount 250000) | new row for relation "payment" violates check constraint "payment_currency_ngn" | check constraint payment_currency_ngn
+B3 | payment with a negative amount (-5) for trip 01 | payment amount -5 does not equal the trip fare 250000 | trigger payment_enforce_rules
+@END
+@P Stage 3 rule: demonstrations of rejected inserts must run as the role ridehail_app. Each demonstration of a refused insert or update (a second active trip, a negative amount, an edit of a completed trip, and so on) must be run after SET ROLE ridehail_app (or SET LOCAL ROLE inside a rolled back transaction), never as the dev login ridehail. Reasons: (1) ridehail is a superuser (CONFIRMED, rolsuper = t). A superuser skips privilege checks, so a "permission denied" can never appear, and a missing grant would stay invisible. (2) A superuser can switch triggers off or change tables, so a demonstration run that way does not show what the real application can do. (3) Several of my rules depend on current_user (the erasure rule). Every proof ran after SET ROLE ridehail_app from the dev login and printed current_user.
+@CAP Rejected insert 1 (B1): a second active trip for rider 5, refused as ridehail_app.
+@CODE
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+ERROR:  duplicate key value violates unique constraint "trip_one_active_per_rider"
+@END
+@IMG images/screenshot_violation_1_second_active_trip.png | Image 9.1. A second active trip for rider 5 is refused by trip_one_active_per_rider, as ridehail_app.
+@CAP Rejected insert 2a (B7): a rating on an unfinished trip (trip 12 started), refused as ridehail_app.
+@CODE
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+ERROR:  a rating needs a completed trip (status is started) (B7)
+@END
+@IMG images/screenshot_violation_2_rating_on_unfinished_trip.png | Image 9.2. A rating on an unfinished trip (trip 12 started) is refused by rating_enforce_rules, as ridehail_app.
+@CAP Rejected insert 2b (B7): a second rating by the same side, refused as ridehail_app.
+@CODE
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+ERROR:  duplicate key value violates unique constraint "rating_one_per_role_per_trip"
+@END
+@CAP Rejected insert 3a (B3): a payment in USD for trip 01, refused as ridehail_app.
+@CODE
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+ERROR:  new row for relation "payment" violates check constraint "payment_currency_ngn"
+@END
+@IMG images/screenshot_violation_3_payment_in_usd.png | Image 9.3. A payment in USD for trip 01 is refused by payment_currency_ngn, as ridehail_app.
+@CAP Rejected insert 3b (B3): a payment with a negative amount (-5) for trip 01, refused as ridehail_app.
+@CODE
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+ERROR:  payment amount -5 does not equal the trip fare 250000
+@END
+## The limits
+@P Timings on this machine vary by about 3 times between runs, so every millisecond figure in these docs is an order of magnitude, not a promise. The plans themselves are orders of magnitude apart where an index was added: before migration 016 a read of a trip's payments was a parallel Seq Scan of the whole payment table (169,410 rows, 14.5 to 17.7 ms), and after the migration the same read is an Index Scan using payment_trip_id_idx (0.06 to 0.10 ms), while the EP03 full read fell from 13.8 to 16.2 ms to 0.14 to 0.32 ms (CONFIRMED, evidence/migration_016_measure_before.txt and evidence/migration_016_measure_after.txt).
+@P All other proofs (the error mapping, the 45 SQLSTATE tests, the search path attacks, the login role test and the idempotency concurrency test) are listed by evidence file name in Appendix C.

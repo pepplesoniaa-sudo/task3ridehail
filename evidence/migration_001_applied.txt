@@ -1,0 +1,20 @@
+##### APPLY 001 (psql -1 -v ON_ERROR_STOP=1)
+CREATE ROLE
+CREATE ROLE
+CREATE FUNCTION
+CREATE FUNCTION
+##### SHOW after 001
+Did not find any relations.
+        rolname         | can_login | superuser | rolcreaterole | rolcreatedb 
+------------------------+-----------+-----------+---------------+-------------
+ ridehail               | t         | t         | t             | t
+ ridehail_app           | f         | f         | f             | f
+ ridehail_erasure_owner | f         | f         | f             | f
+(3 rows)
+
+     function      |  owner   | security_definer 
+-------------------+----------+------------------
+ append_only_guard | ridehail | f
+ set_updated_at    | ridehail | f
+(2 rows)
+

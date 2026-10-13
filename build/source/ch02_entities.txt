@@ -1,0 +1,93 @@
+# Chapter 2. Entities and relationships
+@SRC Built from docs/02_entities.md and docs/02b_relationships.md.
+## The relationships
+@P Field names are exactly those in docs/02_entities.md. "FK" means foreign key. The FK sits on the "many" side and points at the "one" side. Every FK uses ON DELETE RESTRICT, because rows are never hard deleted when they hold personal or financial history, so a delete that would orphan a row should fail loudly. The table below lists every related pair, R1 to R20.
+@TBL 9
+id | relationship | cardinality
+R1 | rider to fare_quote | one to many
+R2 | rider to trip | one to many
+R3 | rider to idempotency_key | one to many
+R4 | driver to vehicle | one to many
+R5 | driver to trip | one to many (optional: a trip has 0 or 1 driver)
+R6 | vehicle to trip | one to many (optional)
+R7 | fare_quote to trip | one to zero-or-one
+R8 | trip to trip_status_history | one to many
+R9 | trip to location_ping | one to many
+R10 | trip to payment | one to many (at most one live fare payment and one live fee payment)
+R11 | payment to refund | one to many
+R12 | trip to rating | one to many (at most two: one per role)
+R13 | support_admin to refund | one to many
+R14 | support_admin to setting | one to many (optional)
+R15 | rider / driver / support_admin to trip_status_history | one to many each (exactly one of the three is set, or none for system)
+R16 | rider / driver / support_admin to audit_log | one to many each (exactly one set, or none for provider and system)
+R17 | trip to idempotency_key | one to many (optional)
+R18 | payment to idempotency_key | one to many (optional)
+R19 | rider to trip, via fare_quote | the quote must belong to the trip's rider
+R20 | payment or refund to provider_event | one to many, by value only
+@END
+@IMG images/diagram_entity_relationships.png | Image 2.1. The entity relationship diagram | 17.0
+## The two richest entities
+@P The trip and the payment tables carry the most fields, so they are shown in full below. A trip is one ride from request to a final state, and it is also the join between a rider and a driver. A payment is one attempt to collect one fare or one cancellation fee through the payment provider (A4).
+@TBL 8
+Field | Type | Notes
+id | uuid | primary key
+rider_id | uuid | foreign key to rider; never changes
+driver_id | uuid | foreign key to driver; empty until assigned (B2); never changes once set
+vehicle_id | uuid | foreign key to vehicle; empty until assigned; must belong to the same driver
+fare_quote_id | uuid | foreign key to fare_quote; one quote makes at most one trip
+status | text | requested, assigned, arrived, started, completed, cancelled (default requested)
+pickup_address | text | the address text the rider confirmed; the only copy
+dropoff_address | text | same
+driver_name_snapshot | text | HISTORY snapshot of driver.full_name at assignment
+vehicle_plate_snapshot | text | HISTORY snapshot of vehicle.plate_number at assignment
+started_at | timestamptz | set when status becomes started
+completed_at | timestamptz | set when status becomes completed
+cancelled_at | timestamptz | set when status becomes cancelled
+cancelled_by_role | text | rider, driver, support or system (the timeout in B9); set when cancelled
+cancellation_fee_minor | bigint | kobo; set when cancelled (0 means no fee); copied from the setting at that moment
+cancellation_fee_currency | char(3) | NGN; set with the fee
+fare_amount_minor | bigint | final fare in kobo; set when completed
+fare_currency | char(3) | NGN; set with the fare
+distance_m | integer | driven distance in metres; set when completed
+created_at | timestamptz | this is the moment of request
+updated_at | timestamptz | the only field that may change after completion (B4)
+@END
+@TBL 8
+Field | Type | Notes
+id | uuid | primary key
+trip_id | uuid | foreign key to trip; the rider is found through the trip
+purpose | text | fare or cancellation_fee
+amount_minor | bigint | kobo; more than 0; must equal the trip's fare or fee
+currency | char(3) | NGN
+status | text | pending, succeeded, failed (default pending). The provider moves it out of pending. Support may only fail a pending payment after a payment_not_found provider_event exists for it (03, move P3)
+provider_reference | text | the provider's own id for this payment; unique (A4). Matches provider_event.provider_reference by value, not by foreign key
+paid_at | timestamptz | required when succeeded
+failure_reason | text | required when failed
+created_at | timestamptz | 
+updated_at | timestamptz | 
+@END
+## All sixteen entities
+@P The entity list I was given has 14 entries. I added two and dropped none, so the total is 16 entities. The two added are status_transition_rule (entity 15), which keeps the legal status changes (B5, B9) as rows a person can read, query and review, and provider_event (entity 16), which stores one row per message from the payment provider so a repeated or contradicting message (U4, B6) is recognised.
+@TBL 8
+Entity | Identifier | Number of fields | What it is for
+rider | id | 9 | A person who requests and pays for trips.
+driver | id | 9 | A person who accepts and drives trips.
+vehicle | id | 11 | A car that belongs to one driver.
+trip | id | 21 | One ride from request to a final state; also the join between a rider and a driver.
+trip_status_history | id | 11 | One row for every status change of a trip, written by the database itself (B5). Append-only.
+location_ping | id | 8 | One GPS point sent by the driver's phone while a trip is in progress. Append-only except for scheduled deletion.
+fare_quote | id | 13 | The price estimate shown to the rider before the trip exists. It is never edited.
+payment | id | 11 | One attempt to collect one fare or one cancellation fee through the payment provider (A4).
+refund | id | 9 | Money returned to the rider against one payment, whole or part. Never edited.
+rating | id | 7 | One person's rating of the other after a completed trip. Never edited.
+idempotency_key | id | 12 | A client-chosen key that makes a retry safe. Stores the first answer so a retry gets it back unchanged.
+setting | key (text) | 7 | Named whole-number settings that the owner can change without a code release.
+support_admin | id | 7 | A staff member who investigates trips, cancels and refunds.
+audit_log | id | 12 | A permanent record of sensitive actions: setting changes, payment status changes, refunds, cancellations by support, and support notes about disputes. Append-only.
+status_transition_rule | the whole row (entity, from_status, to_status, actor_role) | 6 | One row per legal status change for a given actor, for the trip and for the payment.
+provider_event | id (our uuid) | 12 | One row for each message the payment provider sends us (a payment or refund result).
+@END
+@P The field tables of the other 14 entities are not reproduced here. They stay in docs/02_entities.md and are listed in the appendix by name.
+## Conventions
+@P Every table follows the same conventions. Every table has an identifier, the column id of type uuid, which is a random uuid rather than a sequential number. Every table also has created_at and updated_at, both timestamptz NOT NULL DEFAULT now(), and a shared trigger set_updated_at refreshes updated_at on every update. On the append-only tables no update is ever allowed, so updated_at always equals created_at, and it is kept only so every table looks the same. Money is a bigint count of kobo with a char(3) currency column beside it, so no float or numeric is used for money. Latitude is numeric(8,6) and longitude is numeric(9,6), chosen so the same value always reads back exactly. Required means NOT NULL and optional means NULL allowed. Two tables are the exceptions to the id rule: setting uses the text column key as its primary key, and status_transition_rule uses the whole row (entity, from_status, to_status, actor_role) as its primary key.
+@P Three links are deliberately not foreign keys. The first is audit_log.entity_id, which points at different tables depending on entity_type, and a foreign key cannot do that, so integrity comes from the trigger that writes the row. The second is status_transition_rule, which is not linked to trip.status or payment.status because a foreign key cannot check a pair of values (from and to); instead a trigger reads the rule rows. The third is provider_event.provider_reference, which is not linked to payment or refund by a foreign key; this is the same by-value link as R20, because the same column can point at either table and a message about a reference we do not know must still be stored so support can see it (U4, B6), with the match done by value in the callback handler.

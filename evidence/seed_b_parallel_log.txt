@@ -1,0 +1,47 @@
+##### SEED B parallel load of terminal trips t=2001..199300, 4 sessions (t mod 4 = 0..3), chunks of 20000, all triggers ON (run 2, after the integer-loop-variable fix)
+start: 2026-10-06 19:16:32
+session 3 chunk 2001..22000 rc=0 seconds=163 at 19:19:16
+session 1 chunk 2001..22000 rc=0 seconds=166 at 19:19:18
+session 2 chunk 2001..22000 rc=0 seconds=176 at 19:19:28
+session 0 chunk 2001..22000 rc=0 seconds=190 at 19:19:43
+session 1 chunk 22001..42000 rc=0 seconds=222 at 19:23:00
+session 3 chunk 22001..42000 rc=0 seconds=224 at 19:23:00
+session 2 chunk 22001..42000 rc=0 seconds=241 at 19:23:29
+session 0 chunk 22001..42000 rc=0 seconds=272 at 19:24:15
+session 3 chunk 42001..62000 rc=0 seconds=209 at 19:26:29
+session 1 chunk 42001..62000 rc=0 seconds=210 at 19:26:31
+session 2 chunk 42001..62000 rc=0 seconds=211 at 19:27:01
+session 0 chunk 42001..62000 rc=0 seconds=202 at 19:27:38
+session 1 chunk 62001..82000 rc=0 seconds=125 at 19:28:36
+session 3 chunk 62001..82000 rc=0 seconds=127 at 19:28:36
+session 2 chunk 62001..82000 rc=0 seconds=124 at 19:29:05
+session 0 chunk 62001..82000 rc=0 seconds=122 at 19:29:41
+session 3 chunk 82001..102000 rc=0 seconds=99 at 19:30:15
+session 1 chunk 82001..102000 rc=0 seconds=99 at 19:30:16
+session 2 chunk 82001..102000 rc=0 seconds=114 at 19:30:59
+session 0 chunk 82001..102000 rc=0 seconds=153 at 19:32:14
+session 1 chunk 102001..122000 rc=0 seconds=142 at 19:32:38
+session 3 chunk 102001..122000 rc=0 seconds=143 at 19:32:38
+session 2 chunk 102001..122000 rc=0 seconds=174 at 19:33:53
+session 0 chunk 102001..122000 rc=0 seconds=179 at 19:35:14
+session 3 chunk 122001..142000 rc=0 seconds=161 at 19:35:20
+session 1 chunk 122001..142000 rc=0 seconds=167 at 19:35:25
+session 2 chunk 122001..142000 rc=0 seconds=160 at 19:36:33
+session 3 chunk 142001..162000 rc=0 seconds=134 at 19:37:34
+session 1 chunk 142001..162000 rc=0 seconds=136 at 19:37:41
+session 0 chunk 122001..142000 rc=0 seconds=157 at 19:37:51
+session 2 chunk 142001..162000 rc=0 seconds=144 at 19:38:57
+session 3 chunk 162001..182000 rc=0 seconds=140 at 19:39:54
+session 1 chunk 162001..182000 rc=0 seconds=140 at 19:40:01
+session 0 chunk 142001..162000 rc=0 seconds=185 at 19:40:56
+session 2 chunk 162001..182000 rc=0 seconds=177 at 19:41:54
+session 3 chunk 182001..199300 rc=0 seconds=155 at 19:42:29
+session 3 finished at 19:42:29
+session 1 chunk 182001..199300 rc=0 seconds=153 at 19:42:34
+session 1 finished at 19:42:34
+session 0 chunk 162001..182000 rc=0 seconds=153 at 19:43:30
+session 2 chunk 182001..199300 rc=0 seconds=105 at 19:43:39
+session 2 finished at 19:43:39
+session 0 chunk 182001..199300 rc=0 seconds=114 at 19:45:24
+session 0 finished at 19:45:24
+end: 2026-10-06 19:45:24

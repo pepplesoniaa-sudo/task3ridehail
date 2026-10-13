@@ -1,0 +1,53 @@
+##### Does anything need temp tables? (read only)
+2026-10-06 22:48:56
+--- every use of TEMP / TEMPORARY / pg_temp in db\ (case-insensitive), file:line
+db/queries/proofs_followup2_b_search_path.sql:9:\echo '################ E1: ridehail_app creates a TEMP table named audit_log and lets the writer insert into it (payment statu
+db/queries/proofs_followup2_b_search_path.sql:13:CREATE TEMP TABLE audit_log (LIKE public.audit_log INCLUDING DEFAULTS);
+db/queries/proofs_followup2_b_search_path.sql:14:GRANT INSERT ON pg_temp.audit_log TO ridehail_writer;
+db/queries/proofs_followup2_b_search_path.sql:19:SELECT count(*) AS rows_that_went_into_the_temp_table FROM pg_temp.audit_log;
+db/queries/proofs_followup2_b_search_path.sql:23:\echo '################ E2: a TEMP table named trip_status_history (trip move by driver 3 on trip 10)'
+db/queries/proofs_followup2_b_search_path.sql:27:CREATE TEMP TABLE trip_status_history (LIKE public.trip_status_history INCLUDING DEFAULTS);
+db/queries/proofs_followup2_b_search_path.sql:28:ALTER TABLE pg_temp.trip_status_history ALTER COLUMN seq SET DEFAULT 1;  -- the attacker gives its table a seq default so the 
+db/queries/proofs_followup2_b_search_path.sql:29:GRANT INSERT ON pg_temp.trip_status_history TO ridehail_writer;
+db/queries/proofs_followup2_b_search_path.sql:34:SELECT count(*) AS rows_that_went_into_the_temp_table FROM pg_temp.trip_status_history;
+db/queries/proofs_followup2_b_search_path.sql:64:\echo '################ E4: the NON-definer triggers: a TEMP table named status_transition_rule allows a skipped move (assigne
+db/queries/proofs_followup2_b_search_path.sql:68:CREATE TEMP TABLE status_transition_rule (entity text, from_status text, to_status text, actor_role text);
+db/queries/proofs_followup2_b_search_path.sql:69:INSERT INTO pg_temp.status_transition_rule VALUES ('trip', 'assigned', 'started', 'driver');
+db/queries/proofs_followup2_b_search_path.sql:73:\echo '--- control: the same skipped move WITHOUT the temp table is refused'
+db/migrations/013_search_path_pg_temp_last.sql:18:ALTER FUNCTION set_updated_at()                SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:19:ALTER FUNCTION append_only_guard()             SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:21:ALTER FUNCTION trip_enforce_transition()       SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:22:ALTER FUNCTION trip_write_history()            SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:23:ALTER FUNCTION trip_block_delete()             SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:25:ALTER FUNCTION setting_write_audit()           SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:27:ALTER FUNCTION payment_enforce_rules()         SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:28:ALTER FUNCTION payment_write_audit()           SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:29:ALTER FUNCTION refund_enforce_total()          SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:30:ALTER FUNCTION provider_event_guard()          SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:31:ALTER FUNCTION provider_event_write_audit()    SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:33:ALTER FUNCTION rating_enforce_rules()          SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:34:ALTER FUNCTION rating_update_cache()           SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:35:ALTER FUNCTION rating_block_change()           SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:36:ALTER FUNCTION ping_enforce_trip_status()      SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:38:ALTER FUNCTION erase_rider(uuid)               SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:39:ALTER FUNCTION erase_driver(uuid)              SET search_path = pg_catalog, public, pg_temp;
+db/migrations/013_search_path_pg_temp_last.sql:40:ALTER FUNCTION add_support_note(text, uuid, text) SET search_path = pg_catalog, public, pg_temp;
+
+--- the same, classified by what runs it
+db/queries/proofs_followup2_b_search_path.sql : 3 CREATE TEMP statements
+
+--- current privilege state
+        rolname         | may_create_temp_tables | rolsuper 
+------------------------+------------------------+----------
+ ridehail               | t                      | t
+ ridehail_app           | t                      | f
+ ridehail_erasure_owner | t                      | f
+ ridehail_writer        | t                      | f
+(4 rows)
+
+     datname     | datacl 
+-----------------+--------
+ ridehail_design | 
+(1 row)
+
+--- sorts and hashes that spill to disk use temp FILES, not temp tables: is a TEMP privilege needed for that?  (checked after the revoke, below)

@@ -1,0 +1,42 @@
+##### investigation of the 126 chain violations by seq (read only)
+Pager usage is off.
+SELECT 126
+ violating_rows | violating_trips 
+----------------+-----------------
+            126 |              62
+(1 row)
+
+ history_rows_of_those_trips 
+-----------------------------
+                         299
+(1 row)
+
+                   which                    | count 
+--------------------------------------------+-------
+ trip is small set (eeeeeeee) or bulk: bulk |    62
+(1 row)
+
+                 trip                 |  seq  |   ctid   |        move        
+--------------------------------------+-------+----------+--------------------
+ 40000000-0000-0000-0000-000000002845 | 13160 | (215,45) | started>completed
+ 40000000-0000-0000-0000-000000002845 | 13251 | (217,14) | (new)>requested
+ 40000000-0000-0000-0000-000000002845 | 13252 | (217,15) | requested>assigned
+ 40000000-0000-0000-0000-000000002845 | 13253 | (217,16) | assigned>arrived
+ 40000000-0000-0000-0000-000000002845 | 13254 | (217,17) | arrived>started
+(5 rows)
+
+                span                 
+-------------------------------------
+ violating trips: avg seq span 50059
+(1 row)
+
+                  ?column?                  
+--------------------------------------------
+ normal sample (1000 trips): avg seq span 4
+(1 row)
+
+                       ?column?                        
+-------------------------------------------------------
+ violating trips: avg distinct heap pages per trip 2.1
+(1 row)
+

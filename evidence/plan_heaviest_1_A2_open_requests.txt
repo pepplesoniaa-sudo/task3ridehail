@@ -1,0 +1,32 @@
+=== P03 A2.1 open requests near the driver
+                                                                              QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5469.54..5469.58 rows=14 width=64) (actual time=20.235..20.246 rows=20 loops=1)
+   Buffers: shared hit=5817
+   ->  Sort  (cost=5469.54..5469.58 rows=14 width=64) (actual time=20.232..20.240 rows=20 loops=1)
+         Sort Key: t.created_at
+         Sort Method: quicksort  Memory: 27kB
+         Buffers: shared hit=5817
+         ->  Nested Loop  (cost=2151.04..5469.28 rows=14 width=64) (actual time=16.551..20.179 rows=22 loops=1)
+               Buffers: shared hit=5814
+               ->  Bitmap Heap Scan on trip t  (cost=2150.62..2158.56 rows=453 width=58) (actual time=6.588..19.348 rows=401 loops=1)
+                     Recheck Cond: ((status = ANY ('{requested,assigned,arrived,started}'::text[])) AND (status = 'requested'::text))
+                     Heap Blocks: exact=3956
+                     Buffers: shared hit=4210
+                     ->  BitmapAnd  (cost=2150.62..2150.62 rows=2 width=0) (actual time=5.572..5.574 rows=0 loops=1)
+                           Buffers: shared hit=254
+                           ->  Bitmap Index Scan on trip_one_active_per_driver  (cost=0.00..811.61 rows=667 width=0) (actual time=3.806..3.806 rows=24446 loops=1)
+                                 Buffers: shared hit=198
+                           ->  Bitmap Index Scan on trip_requested_created_at_idx  (cost=0.00..1338.54 rows=453 width=0) (actual time=1.567..1.567 rows=9354 loops=1)
+                                 Buffers: shared hit=56
+               ->  Index Scan using fare_quote_pkey on fare_quote q  (cost=0.42..7.31 rows=1 width=38) (actual time=0.002..0.002 rows=0 loops=401)
+                     Index Cond: (id = t.fare_quote_id)
+                     Filter: ((pickup_latitude >= 6.475) AND (pickup_latitude <= 6.495) AND (pickup_longitude >= 3.385) AND (pickup_longitude <= 3.405))
+                     Rows Removed by Filter: 1
+                     Buffers: shared hit=1604
+ Planning:
+   Buffers: shared hit=217
+ Planning Time: 1.905 ms
+ Execution Time: 20.567 ms
+(27 rows)
+

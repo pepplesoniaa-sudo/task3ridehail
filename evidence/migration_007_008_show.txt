@@ -1,0 +1,84 @@
+##### SHOW after 007: all indexes (41 expected)
+ total_indexes 
+---------------
+            41
+(1 row)
+
+            indexname            |      tablename      
+---------------------------------+---------------------
+ location_ping_trip_recorded_idx | location_ping
+ payment_pending_created_at_idx  | payment
+ provider_event_reference_idx    | provider_event
+ refund_payment_id_idx           | refund
+ trip_driver_history_idx         | trip
+ trip_requested_created_at_idx   | trip
+ trip_rider_history_idx          | trip
+ trip_status_history_trip_idx    | trip_status_history
+ vehicle_driver_id_idx           | vehicle
+(9 rows)
+
+##### SHOW after 008: table privileges of the two roles
+   grantee    |       table_name       |         privileges          
+--------------+------------------------+-----------------------------
+ ridehail_app | audit_log              | INSERT,SELECT
+ ridehail_app | driver                 | INSERT,SELECT,UPDATE
+ ridehail_app | fare_quote             | INSERT,SELECT
+ ridehail_app | idempotency_key        | DELETE,INSERT,SELECT,UPDATE
+ ridehail_app | location_ping          | DELETE,INSERT,SELECT
+ ridehail_app | payment                | INSERT,SELECT,UPDATE
+ ridehail_app | provider_event         | INSERT,SELECT,UPDATE
+ ridehail_app | rating                 | INSERT,SELECT
+ ridehail_app | refund                 | INSERT,SELECT
+ ridehail_app | rider                  | INSERT,SELECT,UPDATE
+ ridehail_app | setting                | INSERT,SELECT,UPDATE
+ ridehail_app | status_transition_rule | SELECT
+ ridehail_app | support_admin          | INSERT,SELECT,UPDATE
+ ridehail_app | trip                   | INSERT,SELECT,UPDATE
+ ridehail_app | trip_status_history    | INSERT,SELECT
+ ridehail_app | vehicle                | INSERT,SELECT,UPDATE
+(16 rows)
+
+        grantee         | table_name |      column_name       | privilege_type 
+------------------------+------------+------------------------+----------------
+ ridehail_erasure_owner | driver     | deleted_at             | UPDATE
+ ridehail_erasure_owner | driver     | full_name              | UPDATE
+ ridehail_erasure_owner | driver     | licence_number         | UPDATE
+ ridehail_erasure_owner | driver     | phone                  | UPDATE
+ ridehail_erasure_owner | rating     | comment                | UPDATE
+ ridehail_erasure_owner | rider      | deleted_at             | UPDATE
+ ridehail_erasure_owner | rider      | email                  | UPDATE
+ ridehail_erasure_owner | rider      | full_name              | UPDATE
+ ridehail_erasure_owner | rider      | phone                  | UPDATE
+ ridehail_erasure_owner | trip       | driver_name_snapshot   | UPDATE
+ ridehail_erasure_owner | trip       | dropoff_address        | UPDATE
+ ridehail_erasure_owner | trip       | pickup_address         | UPDATE
+ ridehail_erasure_owner | trip       | vehicle_plate_snapshot | UPDATE
+ ridehail_erasure_owner | vehicle    | deleted_at             | UPDATE
+ ridehail_erasure_owner | vehicle    | is_active              | UPDATE
+ ridehail_erasure_owner | vehicle    | plate_number           | UPDATE
+(16 rows)
+
+   proname    |         owner          | app_can_execute | owner_can_execute | public_can_execute 
+--------------+------------------------+-----------------+-------------------+--------------------
+ erase_driver | ridehail_erasure_owner | t               | t                 | f
+ erase_rider  | ridehail_erasure_owner | t               | t                 | f
+(2 rows)
+
+##### ROW COUNTS after 007 and 008 (all tables)
+audit_log 0
+driver 0
+fare_quote 0
+idempotency_key 0
+location_ping 0
+payment 0
+provider_event 0
+rating 0
+refund 0
+rider 0
+setting 0
+status_transition_rule 17
+support_admin 0
+trip 0
+trip_status_history 0
+vehicle 0
+status_transition_rule rows: 17

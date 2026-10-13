@@ -1,0 +1,64 @@
+##### SEED B step 2: active (300) and requested (400) trips, t=199301..200000, one session, triggers on
+
+DO
+RESET
+step 2 seconds: 12.2
+##### ANALYZE
+ANALYZE
+analyze seconds: 27.5
+##### row counts after the bulk load
+audit_log 169016
+driver 805
+fare_quote 200012
+idempotency_key 33887
+location_ping 133643
+payment 169410
+provider_event 17544
+rating 85703
+refund 1
+rider 5005
+setting 4
+status_transition_rule 17
+support_admin 2
+trip 200012
+trip_status_history 932072
+vehicle 805
+##### exact counts
+  status   | count  
+-----------+--------
+ arrived   |    101
+ assigned  |    101
+ cancelled |  29900
+ completed | 169408
+ requested |    401
+ started   |    101
+(6 rows)
+
+ trips  | bulk_trips | riders | drivers | vehicles | quotes | history | payments | pending_payments | ratings | pings  | events | idem_keys | audit_rows 
+--------+------------+--------+---------+----------+--------+---------+----------+------------------+---------+--------+--------+-----------+------------
+ 200012 |     200000 |   5005 |     805 |      805 | 200012 |  932072 |   169410 |              399 |   85703 | 133643 |  17544 |     33887 |     169016
+(1 row)
+
+##### sizes
+       relname       | total_size 
+---------------------+------------
+ trip_status_history | 170 MB
+ trip                | 163 MB
+ payment             | 60 MB
+ fare_quote          | 42 MB
+ audit_log           | 34 MB
+ location_ping       | 24 MB
+(6 rows)
+
+##### sanity: any rider or driver with two active trips? triggers all enabled?
+ riders_two_active | drivers_two_active | trigger_states 
+-------------------+--------------------+----------------
+                 0 |                  0 | O
+(1 row)
+
+##### rating cache consistent with the rating rows (the detect query of docs 04 question 1)
+ drivers_with_drifted_cache 
+----------------------------
+                          0
+(1 row)
+

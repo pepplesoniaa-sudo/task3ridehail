@@ -1,0 +1,783 @@
+=== E01 rider_has_active_trip: rider 5 already has trip 09 (requested) and requests another
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000005
+(1 row)
+
+INSERT 0 1
+ERROR:  duplicate key value violates unique constraint "trip_one_active_per_rider"
+DETAIL:  Key (rider_id)=(aaaaaaaa-0000-0000-0000-000000000005) already exists.
+SQLSTATE 23505
+=== E02a quote_not_found: rider 3000 uses a quote that belongs to rider 3001
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003001
+(1 row)
+
+INSERT 0 1
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+ERROR:  insert or update on table "trip" violates foreign key constraint "trip_quote_belongs_to_rider"
+DETAIL:  Key (fare_quote_id, rider_id)=(ffffffff-0000-0000-0000-0000000000d2, 10000000-0000-0000-0000-000000003000) is not present in table "fare_quote".
+SQLSTATE 23503
+=== E02b quote_not_found: a quote id that does not exist
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+ERROR:  insert or update on table "trip" violates foreign key constraint "trip_quote_belongs_to_rider"
+DETAIL:  Key (fare_quote_id, rider_id)=(ffffffff-0000-0000-0000-0000000000ee, 10000000-0000-0000-0000-000000003000) is not present in table "fare_quote".
+SQLSTATE 23503
+=== E03 quote_already_used: the same quote starts a second trip after the first one was cancelled
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+  status   | cancellation_fee_minor 
+-----------+------------------------
+ cancelled |                      0
+(1 row)
+
+UPDATE 1
+ERROR:  duplicate key value violates unique constraint "trip_fare_quote_id_key"
+DETAIL:  Key (fare_quote_id)=(ffffffff-0000-0000-0000-0000000000d3) already exists.
+SQLSTATE 23505
+=== E04 quote_expired: a quote created 2 hours ago that expired 1 hour ago
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT 0 1
+ERROR:  fare quote ffffffff-0000-0000-0000-0000000000d4 has expired
+SQLSTATE P0001
+=== E05 illegal_transition: driver 4 tries to start trip 09 (status requested)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  illegal transition requested -> started by driver
+SQLSTATE P0001
+=== E05b illegal_transition: rider 2 tries to cancel trip 12 (status started)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000002
+(1 row)
+
+ERROR:  illegal transition started -> cancelled by rider
+SQLSTATE P0001
+=== E06 trip_finished: driver 1 tries to move completed trip 01 to started
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  trip is completed (terminal): only updated_at may change (B4)
+SQLSTATE P0001
+=== E07 trip_not_open: accept with the guard WHERE status = requested on a trip that is already started (no error, zero rows)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000001
+(1 row)
+
+UPDATE 0
+=== E08 driver_has_active_trip: driver 3 (active trip 10) accepts trip 09
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "trip_one_active_per_driver"
+DETAIL:  Key (driver_id)=(bbbbbbbb-0000-0000-0000-000000000003) already exists.
+SQLSTATE 23505
+=== E09 vehicle_not_yours: driver 1 (free) accepts trip 09 with the vehicle of driver 4
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  insert or update on table "trip" violates foreign key constraint "trip_vehicle_belongs_to_driver"
+DETAIL:  Key (vehicle_id, driver_id)=(cccccccc-0000-0000-0000-000000000004, bbbbbbbb-0000-0000-0000-000000000001) is not present in table "vehicle".
+SQLSTATE 23503
+=== E10 trip_not_in_progress: a location ping for completed trip 01
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  a location ping needs a trip that is assigned, arrived or started (status is completed)
+SQLSTATE P0001
+=== E11 validation_failed (database backstop): latitude 95 on started trip 12; accuracy -1
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  new row for relation "location_ping" violates check constraint "ping_latitude_range"
+DETAIL:  Failing row contains (a03815ae-bb0e-4b2a-b5ad-ea22ed8f33ed, eeeeeeee-0000-0000-0000-000000000012, 95.000000, 3.390000, null, 2026-10-06 22:01:18.387578+00, 2026-10-06 22:01:18.387578+00, 2026-10-06 22:01:18.387578+00).
+SQLSTATE 23514
+ERROR:  new row for relation "location_ping" violates check constraint "ping_accuracy_not_negative"
+DETAIL:  Failing row contains (7c5be08b-0be2-4f59-b62f-a04b361dacc2, eeeeeeee-0000-0000-0000-000000000012, 6.450000, 3.390000, -1, 2026-10-06 22:01:18.389793+00, 2026-10-06 22:01:18.389793+00, 2026-10-06 22:01:18.389793+00).
+SQLSTATE 23514
+=== E12 payment_already_exists: rider 3 pays trip 03 again (a pending fare payment exists)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "payment_one_live_per_purpose"
+DETAIL:  Key (trip_id, purpose)=(eeeeeeee-0000-0000-0000-000000000003, fare) already exists.
+SQLSTATE 23505
+=== E13 trip_not_payable: rider 2 pays trip 12 (started)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000002
+(1 row)
+
+ERROR:  a fare payment needs a completed trip (status is started)
+SQLSTATE P0001
+=== E14 nothing_to_pay: rider 1 pays a cancellation fee for trip 05 (cancelled, fee 0)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  a cancellation fee payment needs a cancelled trip with a fee above 0
+SQLSTATE P0001
+=== E15 internal: a wrong amount (the API computes the amount, so this means an API bug)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  payment amount 1 does not equal the trip fare 150000
+SQLSTATE P0001
+=== E16 payment_final: the provider tries to fail payment PRV-T01-A that already succeeded
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ERROR:  payment is succeeded (terminal): only updated_at may change
+SQLSTATE P0001
+=== E17 payment_proof_missing: support fails pending payment PRV-T03-A with no payment_not_found event
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  support may fail a pending payment only after a payment_not_found event for this reference, received after the payment was created and not superseded by a later event (P3)
+SQLSTATE P0001
+=== E18 internal: support marks a pending payment succeeded (no such move exists; the API has no endpoint for it)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  illegal payment transition pending -> succeeded by support
+SQLSTATE P0001
+=== E19 refund_exceeds_payment: refund 250000 when 50000 of 250000 is already refunded
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  refunds 50000 + 250000 would exceed the payment amount 250000 (B10)
+SQLSTATE P0001
+=== E20 payment_not_succeeded: refund against pending payment PRV-T03-A
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  a refund needs a succeeded payment (status is pending)
+SQLSTATE P0001
+=== E21 refund_already_recorded: a refund with the provider reference RF-T01-A again (small amount so the total rule passes)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "refund_provider_reference_key"
+DETAIL:  Key (provider_reference)=(RF-T01-A) already exists.
+SQLSTATE 23505
+=== E22 already_rated: rider 2 rates trip 02 a second time
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000002
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "rating_one_per_role_per_trip"
+DETAIL:  Key (trip_id, rater_role)=(eeeeeeee-0000-0000-0000-000000000002, rider) already exists.
+SQLSTATE 23505
+=== E23 trip_not_completed: rider 2 rates trip 12 (started)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000002
+(1 row)
+
+ERROR:  a rating needs a completed trip (status is started) (B7)
+SQLSTATE P0001
+=== E24 rating_window_closed: the window set to 0 days by support inside the test, then rider 3 rates completed trip 03
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+        key         | int_value 
+--------------------+-----------
+ rating_window_days |         0
+(1 row)
+
+UPDATE 1
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  the rating window of 0 days has passed (B7)
+SQLSTATE P0001
+=== E25a validation_failed (database backstop): stars 6
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  new row for relation "rating" violates check constraint "rating_stars_range"
+DETAIL:  Failing row contains (f8910dc3-cabf-4477-83cb-6a332dc9b8bc, eeeeeeee-0000-0000-0000-000000000003, rider, 6, null, 2026-10-06 22:01:18.461965+00, 2026-10-06 22:01:18.461965+00).
+SQLSTATE 23514
+=== E25b validation_failed (database backstop): a comment of 501 characters
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  new row for relation "rating" violates check constraint "rating_comment_length"
+DETAIL:  Failing row contains (9cc47b45-a172-4e9f-80f7-6f8fb447254c, eeeeeeee-0000-0000-0000-000000000003, rider, 5, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx..., 2026-10-06 22:01:18.46424+00, 2026-10-06 22:01:18.46424+00).
+SQLSTATE 23514
+=== E26 person_has_active_trip: erase_rider for rider 2 (active trip 12)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  rider aaaaaaaa-0000-0000-0000-000000000002 has an active trip: cannot erase (B8)
+SQLSTATE P0001
+=== E26b person_has_active_trip: erase_driver for driver 3 (active trip 10)
+ERROR:  driver bbbbbbbb-0000-0000-0000-000000000003 has an active trip: cannot erase (B8)
+SQLSTATE P0001
+=== E27 not_found: erase_rider for an id that does not exist
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  rider 00000000-0000-0000-0000-0000000000ff does not exist
+SQLSTATE P0001
+=== E28a validation_failed (database backstop): setting value -1
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  new row for relation "setting" violates check constraint "setting_value_not_negative"
+DETAIL:  Failing row contains (cancellation_fee_minor, -1, NGN, Flat fee in kobo when a rider cancels after assignment (B9). Pla..., dddddddd-0000-0000-0000-000000000001, 2026-10-06 18:07:13.612607+00, 2026-10-06 22:01:18.47548+00).
+SQLSTATE 23514
+=== E28b validation_failed (database backstop): a _minor key with no currency
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  new row for relation "setting" violates check constraint "setting_money_has_currency"
+DETAIL:  Failing row contains (base_fare_minor, 50000, null, x, dddddddd-0000-0000-0000-000000000001, 2026-10-06 22:01:18.478261+00, 2026-10-06 22:01:18.478261+00).
+SQLSTATE 23514
+=== E28c validation_failed (database backstop): currency USD
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  new row for relation "setting" violates check constraint "setting_currency_ngn"
+DETAIL:  Failing row contains (base_fare_minor, 50000, USD, x, dddddddd-0000-0000-0000-000000000001, 2026-10-06 22:01:18.479047+00, 2026-10-06 22:01:18.479047+00).
+SQLSTATE 23514
+=== E28d the setting UPSERT the API uses works: INSERT ... ON CONFLICT (key) DO UPDATE as support (new key, then existing key)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+       key       | int_value | currency 
+-----------------+-----------+----------
+ base_fare_minor |     50000 | NGN
+(1 row)
+
+INSERT 0 1
+          key           | int_value | currency 
+------------------------+-----------+----------
+ cancellation_fee_minor |     60000 | NGN
+(1 row)
+
+INSERT 0 1
+ actor_role |     action     |                            details                            
+------------+----------------+---------------------------------------------------------------
+ support    | setting_change | {"to": 50000, "key": "base_fare_minor", "from": null}
+ support    | setting_change | {"to": 60000, "key": "cancellation_fee_minor", "from": 50000}
+(2 rows)
+
+=== E29 internal: a setting change claimed by a rider (the API only lets support call it)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  only a support actor may change a setting (actor rider / aaaaaaaa-0000-0000-0000-000000000001)
+SQLSTATE P0001
+=== E30a validation_failed: add_support_note with an empty note
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000002
+(1 row)
+
+ERROR:  a support note cannot be empty
+SQLSTATE P0001
+=== E30b validation_failed (database backstop): an entity_type that is not allowed
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000002
+(1 row)
+
+ERROR:  new row for relation "audit_log" violates check constraint "audit_entity_type_valid"
+DETAIL:  Failing row contains (id, actor_role, actor_admin_id, action, entity_type, entity_id, note) = (db45dd79-444c-405a-9143-b50dad1be98b, support, dddddddd-0000-0000-0000-000000000002, dispute_note, invoice, eeeeeeee-0000-0000-0000-000000000001, note).
+SQLSTATE 23514
+=== E30c validation_failed (database backstop): no entity_id for a trip note
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000002
+(1 row)
+
+ERROR:  new row for relation "audit_log" violates check constraint "audit_entity_id_matches_type"
+DETAIL:  Failing row contains (id, actor_role, actor_admin_id, action, entity_type, entity_id, note) = (49a18f41-79fe-4e9c-9a83-3655145cb91f, support, dddddddd-0000-0000-0000-000000000002, dispute_note, trip, null, note).
+SQLSTATE 23514
+=== E30d internal: add_support_note claimed by a rider
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  only a support actor may write a support note (actor rider / aaaaaaaa-0000-0000-0000-000000000001)
+SQLSTATE P0001
+=== E30e the note works for support (returns the new id, one audit row)
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000002
+(1 row)
+
+ note_written 
+--------------
+ t
+(1 row)
+
+ actor_role |    action    | entity_type |                  note                  
+------------+--------------+-------------+----------------------------------------
+ support    | dispute_note | trip        | Dispute: rider says the route was long
+(1 row)
+
+=== E31a idempotency: the same rider, action and key inserted twice (key req-0001 exists in seed A for rider 1)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "idem_one_key_per_rider_action"
+DETAIL:  Key (rider_id, action, key)=(aaaaaaaa-0000-0000-0000-000000000001, request_trip, req-0001) already exists.
+SQLSTATE 23505
+=== E31b the replay path: INSERT ... ON CONFLICT DO NOTHING returns no row, then the stored answer is read
+ id 
+----
+(0 rows)
+
+INSERT 0 0
+ response_status |                               response_body                                | stored_hash_matches_the_seed_formula | has_trip 
+-----------------+----------------------------------------------------------------------------+--------------------------------------+----------
+             201 | {"status": "requested", "trip_id": "eeeeeeee-0000-0000-0000-000000000001"} | t                                    | t
+(1 row)
+
+=== E31c the same key under another action, and under another rider, is accepted (unique per rider AND action)
+  action  |   key    
+----------+----------
+ pay_trip | req-0001
+(1 row)
+
+INSERT 0 1
+ rider |    action    |   key    
+-------+--------------+----------
+ 3     | request_trip | req-0001
+(1 row)
+
+INSERT 0 1
+=== E31d the in-flight row of seed A (key req-in-flight): response not stored yet
+      key      | first_request_still_running | not_expired 
+---------------+-----------------------------+-------------
+ req-in-flight | t                           | t
+(1 row)
+
+=== E32a invalid_idempotency_key (database backstop): empty key; E32b 129 characters; E32c bad hash
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  new row for relation "idempotency_key" violates check constraint "idem_key_length"
+DETAIL:  Failing row contains (c2ce70c5-4767-43de-96ed-9f62c22f93e9, aaaaaaaa-0000-0000-0000-000000000001, request_trip, , aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, null, null, null, null, 2026-10-07 22:01:18.825821+00, 2026-10-06 22:01:18.825821+00, 2026-10-06 22:01:18.825821+00).
+SQLSTATE 23514
+ERROR:  new row for relation "idempotency_key" violates check constraint "idem_key_length"
+DETAIL:  Failing row contains (3fd81db9-7ba6-43ee-abff-aaa7151015ac, aaaaaaaa-0000-0000-0000-000000000001, request_trip, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk..., aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, null, null, null, null, 2026-10-07 22:01:18.827239+00, 2026-10-06 22:01:18.827239+00, 2026-10-06 22:01:18.827239+00).
+SQLSTATE 23514
+ERROR:  new row for relation "idempotency_key" violates check constraint "idem_hash_format"
+DETAIL:  Failing row contains (df914f1d-93c2-44c5-8edd-83cc84b1b9c7, aaaaaaaa-0000-0000-0000-000000000001, request_trip, k1, NOT-A-HASH, null, null, null, null, 2026-10-07 22:01:18.82828+00, 2026-10-06 22:01:18.82828+00, 2026-10-06 22:01:18.82828+00).
+SQLSTATE 23514
+=== E33a webhook: the same provider_event_id twice (evt-pay-t01 exists)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "provider_event_provider_event_id_key"
+DETAIL:  Key (provider_event_id)=(evt-pay-t01) already exists.
+SQLSTATE 23505
+=== E33b the webhook path: ON CONFLICT DO NOTHING returns no row for a repeated event id
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ id 
+----
+(0 rows)
+
+INSERT 0 0
+=== E33c invalid_event (database backstop): an event type the provider may not send as a webhook value
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ERROR:  new row for relation "provider_event" violates check constraint "provider_event_type_valid"
+DETAIL:  Failing row contains (04f33b53-d244-405a-9fde-44fb41ec29d0, evt-bad-1, PRV-X, payment_pending, null, null, null, 2026-10-06 22:01:18.838791+00, null, null, 2026-10-06 22:01:18.838034+00, 2026-10-06 22:01:18.838034+00).
+SQLSTATE 23514
+=== E33d invalid_event (database backstop): an amount with no currency
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ERROR:  new row for relation "provider_event" violates check constraint "provider_event_money_pair"
+DETAIL:  Failing row contains (a79485a6-ba7b-4f8d-a93a-62d145297b3f, evt-bad-2, PRV-X, payment_succeeded, 100, null, null, 2026-10-06 22:01:18.840461+00, null, null, 2026-10-06 22:01:18.839314+00, 2026-10-06 22:01:18.839314+00).
+SQLSTATE 23514
+=== E33e the webhook applies a success to the pending payment and records the event (the happy path of 03 section 4a)
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_event_id 
+-------------------
+ evt-hook-ok
+(1 row)
+
+INSERT 0 1
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ provider_event_id | outcome 
+-------------------+---------
+ evt-hook-ok       | applied
+(1 row)
+
+UPDATE 1
+=== E34 internal: an update to a received field of a provider_event; E35 internal: processing an event twice
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  provider_event is already processed: it cannot change
+SQLSTATE P0001
+=== E36 internal: a direct INSERT into trip_status_history, and into audit_log (the API role has no INSERT)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  permission denied for table trip_status_history
+SQLSTATE 42501
+=== E37 internal: the actor claimed for a trip insert is not the trip rider
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003001
+(1 row)
+
+INSERT 0 1
+ERROR:  only the rider may request a trip (actor rider / 10000000-0000-0000-0000-000000003001)
+SQLSTATE P0001
+=== E38 internal: driver 4 moves driver 3 trip 10 (the API compares trip.driver_id with the caller first, so this means an API bug)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  actor is not this trip's driver (F9)
+SQLSTATE P0001
+=== E39 internal: driver_id changed after it was set (an accept without the status guard)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  driver_id cannot change once set (F10)
+SQLSTATE P0001
+=== E40 internal: assign with no vehicle
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  a vehicle is required to assign a trip
+SQLSTATE P0001
+=== E41 internal: a column that does not belong to the move (pickup_address changed together with the move to arrived)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  these columns may not change in this move: {status,updated_at,pickup_address}
+SQLSTATE P0001
+=== E42 complete without the facts: completed needs fare, currency and distance (the API always sets them; the check is the backstop)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000005
+(1 row)
+
+ERROR:  new row for relation "trip" violates check constraint "trip_completed_has_facts"
+DETAIL:  Failing row contains (eeeeeeee-0000-0000-0000-000000000012, aaaaaaaa-0000-0000-0000-000000000002, bbbbbbbb-0000-0000-0000-000000000005, cccccccc-0000-0000-0000-000000000005, ffffffff-0000-0000-0000-000000000012, completed, Pickup 12, Lagos, Dropoff 12, Lagos, Driver 5, LAG-105-AA, 2026-10-06 18:07:13.612607+00, 2026-10-06 22:01:18.866874+00, null, null, null, null, null, null, null, 2026-10-06 18:07:13.612607+00, 2026-10-06 22:01:18.866874+00).
+SQLSTATE 23514
+=== E43 the support cancel from started, and the rider cancel fee, work as the contract says (fee shown)
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+  status   | cancelled_by_role | cancellation_fee_minor | cancellation_fee_currency 
+-----------+-------------------+------------------------+---------------------------
+ cancelled | support           |                      0 | NGN
+(1 row)
+
+UPDATE 1
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000004
+(1 row)
+
+  status   | cancelled_by_role | cancellation_fee_minor | cancellation_fee_currency 
+-----------+-------------------+------------------------+---------------------------
+ cancelled | rider             |                  50000 | NGN
+(1 row)
+
+UPDATE 1

@@ -1,0 +1,113 @@
+# Chapter 4. The state machine
+@SRC docs/03_state_machine.md
+
+## Allowed trip transitions
+@P A trip is Active (B0) in the statuses requested, assigned, arrived or started. Terminal means no further status change: completed and cancelled. Each allowed move below is also one row in status_transition_rule with entity = 'trip' (14 rows).
+@IMG images/diagram_state_machine_trip.png | Image 4.1. The trip state machine
+@TBL 9
+# | From | To | Who may do it | Serves | Meaning
+T0 | (new) | requested | rider | A1, B1, B5 | The rider requests a trip. A new trip may only start as requested.
+T1 | requested | assigned | driver | A2, B2 | A driver accepts. driver_id and vehicle_id are set in the same update.
+T2 | assigned | arrived | driver | A3 | The driver reached the pickup.
+T3 | arrived | started | driver | A3 | The rider is in the car. started_at is set.
+T4 | started | completed | driver | A3, B4 | The drive is over. completed_at, fare_amount_minor, fare_currency and distance_m are set.
+T5 | requested | cancelled | rider, support | B9 | No driver yet, so no fee. A driver cannot cancel here, because a requested trip has no driver (assumption 4).
+T6 | assigned | cancelled | rider, driver, support | B9 | Fee only if the rider cancels.
+T7 | arrived | cancelled | rider, driver, support | B9 | Fee only if the rider cancels.
+T8 | started | cancelled | support only | B9 | Rider and driver cannot cancel once the ride has started.
+T9 | requested | cancelled | system | B9, B1 | Timeout: no driver accepted within request_timeout_seconds (placeholder 600, needs owner approval). No fee. It frees the rider to request again (B1). The timer itself is application code (a scheduled job). The database only allows the move for actor system and only from requested.
+@END
+@P Cancellation fee (B9, Q2). When status becomes cancelled, the database copies cancellation_fee_minor from the setting of the same name, but only when cancelled_by_role = 'rider' and the trip was already assigned or arrived. In every other cancellation, including the system timeout T9, the fee is 0 (assumption 6, decision 5). Open (Q6): if an assigned driver never arrives and the rider cancels, this rule still charges the rider, and the owner must decide before launch. The copy is a HISTORY snapshot, so a later change to the setting never changes an old trip.
+
+## Allowed payment transitions
+@P A payment stays pending until the provider answers. It is never failed by our own clock. While a payment is pending, the one-live-payment rule (payment_one_live_per_purpose) keeps the rider from being charged twice, so a stuck pending payment blocks a retry (section 4b is the way out). Statuses: pending, succeeded, failed. Succeeded and failed are terminal. Rows in status_transition_rule with entity = 'payment': three (P1, P2, P3).
+@IMG images/diagram_state_machine_payment.png | Image 4.2. The payment state machine
+@TBL 9
+# | From | To | Who | Serves | Meaning
+P0 | (new) | pending | the API on the rider's request | A4, B6 | A payment may only be created as pending, for a completed trip's fare or a cancelled trip's fee, with the exact amount owed
+P1 | pending | succeeded | provider | A4 | Provider confirms. provider_reference and paid_at must be set
+P2 | pending | failed | provider | A4 | Provider says declined. failure_reason must be set
+P3 | pending | failed | support | A4, B6 | Only if a provider_event of type payment_not_found exists for this payment's provider_reference, was received after the payment was created, and is not older than the latest provider event of any type for that reference (a later payment_succeeded or payment_failed cancels the proof). failure_reason must be set. This is the way out of a stuck payment (section 4b). It is a person's decision after the provider said it has no record, not a timeout
+@END
+
+## Forbidden trip moves
+@P A careless design would allow every row below. Each one is blocked. Three moves are shown in full first, then the rest follow in a compact table. Rows marked "tested" were run in a rolled back transaction (section 7); "yes, built database" names a test raised again on the finished database.
+@TBL 9
+# | Forbidden move | Why it is dangerous | Blocked by | Tested
+F3 | A driver accepts a trip the rider cancelled a second ago (race) | Driver is sent to a rider who is gone. Not obvious: both requests are individually "valid" | the app's update says WHERE status = 'requested', and the trigger refuses cancelled to assigned | yes, step 14 (cut down copy, the trigger refuses cancelled to assigned); yes, built database, F3 race test (guard returns UPDATE 0, and without the guard RH005), evidence\stage5_export4_f3_race.txt
+F9 | driver B moves driver A's trip to arrived | A stranger changes someone else's trip. Not obvious: the move itself is legal | actor check in trigger: driver_id must equal the actor's id | yes, step 7; yes, built database, E38 (migration_015_error_tests_compare.txt) and X2 (proofs_rejected_and_extra.txt)
+F10 | driver B takes a trip driver A already holds, without changing status | Not obvious: status stays "assigned", so the transition table is never consulted. This is the double-accept bug | driver_id cannot change once set, in trip_enforce_transition | yes, step 6; yes, built database, E39 (RH006; migration_015_error_tests_compare.txt)
+@END
+@TBL 8
+Move | Blocked by | Why
+F1 completed to started (re-open) | terminal freeze in trip_enforce_transition | changes a finished, possibly paid, trip (B4)
+F2 cancelled to assigned (zombie trip) | terminal freeze in trip_enforce_transition | a cancelled trip comes back and gets a driver
+F4 support cancels a completed trip | terminal freeze | hides the money trail (B4)
+F5 requested to started (or any skipped step) | no matching row in status_transition_rule | history looks wrong (B5)
+F6 started to arrived (going backwards) | no matching row | rewrites the trip story
+F7 assigned to requested (a driver "un-assigns") | no matching row | history looks as if the trip was never taken
+F8 rider or driver cancels a started trip | no row for those roles | only support may (B9)
+F11 a new trip inserted already as assigned or completed | insert check in trip_enforce_transition | skips A1 and A2
+F12 rider marks the trip arrived | no row for that role | a rider cannot be the driver (A3)
+F13 edit fare_amount_minor of a completed trip | terminal freeze | B4
+F14 change rider_id or fare_quote_id of any trip | immutability check in trip_enforce_transition (RH015) | moves a trip to another account
+F15 delete a trip row | trigger trip_block_delete | loses history (B4, B5)
+F16 a driver has a second active trip | partial unique index trip_one_active_per_driver | B2
+F17 a rider has a second active trip | partial unique index trip_one_active_per_rider | B1
+F18 the system cancels an assigned, arrived or started trip | no row for actor system except requested to cancelled (T9) | cuts a rider or driver off mid-ride
+F19 the application inserts a history row or an audit row itself | ridehail_app has no INSERT on trip_status_history or audit_log (migration 010) | B5 would be meaningless
+@END
+@P Step 15 of the test also showed the other direction: once a trip is cancelled or completed, the rider may request again (the partial index only covers active statuses).
+
+## Forbidden payment moves
+@P Two moves are shown in full first, then the rest follow in a compact table.
+@TBL 9
+# | Forbidden move | Why | Blocked by
+PF2 | failed to succeeded | Not obvious. The rider retried and a new payment exists. Flipping the old one could double charge (B6). A late success on a failed payment is handled as in section 4a | terminal freeze
+PF10 | support fails a pending payment with no payment_not_found event for it, or with an event for another reference, of another type, older than the payment, or superseded by a later event of any type | Support could write off a payment the provider actually took, with nothing to show why | the lookup inside trigger payment_enforce_rules (tested, S1 to S4)
+@END
+@TBL 8
+Move | Blocked by | Why
+PF1 succeeded to failed | terminal freeze in payment_enforce_rules | a late failed message must not erase money we hold
+PF3 support or rider marks a payment succeeded | no row for those roles | only the provider can confirm money
+PF4 a payment created already as succeeded | insert check in payment_enforce_rules | skips the provider
+PF5 a fare payment for a trip that is not completed | trigger payment_enforce_rules (looks at trip.status) | charging before the ride ends
+PF6 an amount different from the trip's fare_amount_minor or cancellation_fee_minor | trigger payment_enforce_rules | wrong charge (B3)
+PF7 a second live payment (pending or succeeded) for the same trip and purpose | partial unique index payment_one_live_per_purpose (tested P2, P4) | double charge (A4, B6)
+PF8 a refund on a payment that is not succeeded, or above the amount | trigger refund_enforce_total (tested R2, R4, R5) | B10
+PF9 our own system marks a pending payment failed | no row for actor system in the payment rules (tested S9) | the provider may still have taken the money
+PF11 support fails a succeeded payment, even when a payment_not_found event exists | terminal freeze (tested S7) | succeeded is terminal, money was taken
+PF12 support marks a pending payment succeeded | no row for support to succeeded (tested S8) | only the provider can confirm money
+@END
+@P Test ids in brackets (P2, P4, R2, R4, R5 and similar) refer to the payment test in the report, not to the payment moves P0 to P3 above. Step ids S1 to S11 belong to the stuck-payment test in section 4b. Every payment status change is also written to audit_log by trigger payment_write_audit, so B5 covers payments (decision 6).
+
+## The rule for a stuck payment (move P3)
+@P Why P3 needs a trigger. The condition looks at another table (provider_event). A check constraint sees only the payment row, so it cannot do this. The payment trigger payment_enforce_rules looks up the event.
+@CODE
+P3 rule: Only if a provider_event of type payment_not_found exists for
+this payment's provider_reference, was received after the payment was
+created, and is not older than the latest provider event of any type for
+that reference (a later payment_succeeded or payment_failed cancels the
+proof). failure_reason must be set. This is the way out of a stuck
+payment (section 4b). It is a person's decision after the provider said
+it has no record, not a timeout.
+@END
+
+## The way out of a stuck pending payment
+@CODE
+What "stuck" means. The payment is pending and the provider has not told
+us the result. By payment_one_live_per_purpose the rider cannot start
+another payment for the same fare, so the rider is blocked (A4, B6).
+
+Reconciliation job (application code). Setting
+payment_reconcile_after_seconds (placeholder 900, needs owner approval).
+Any payment that has been pending longer than that is checked with the
+provider by its provider_reference. The job does one of these, in one
+database transaction:
+@END
+
+## Test of the trigger idea
+@P I built a cut-down copy of the trip table, the rule table and the trigger inside BEGIN ... ROLLBACK, with the same logic as trip_enforce_transition and the two partial indexes. After the rollback I counted tables and functions: 0 tables, 0 functions (CONFIRMED). The history table received 9 rows from the trigger: 4 creation rows (from_status empty), 4 moves of trip 1 (assigned, arrived, started, completed) and 1 cancellation, each with the right actor role. Not tested: two sessions racing at the same moment, the trip_block_delete trigger, the cancellation fee copy, and the snapshot copy. The new system move T9 was not run (it uses the same lookup as the tested moves).
+
+## Scheduled jobs
+@P Two rules need a clock or a poller, and the database cannot run one by itself: the request timeout job (T9, B9, B1) and the payment reconciliation job (section 4b, A4, B6). Both jobs are application code. They are not designed or built here. The request timeout job finds trips with status requested older than request_timeout_seconds (placeholder 600, needs owner approval) and cancels each one with actor system, no fee. The payment reconciliation job finds payments pending longer than payment_reconcile_after_seconds (placeholder 900, needs owner approval) and checks each with the provider, then acts as in the table in 4b. Both connect as role ridehail_app, never the dev superuser ridehail, and both are safe to run twice. Each interval is a setting, and Stage 4 applied placeholders of 60 and 300 seconds that the owner must confirm (09_open_items.md). If either job is down for long, the owner should be told; a health signal for the jobs (last successful run time) is not designed here.

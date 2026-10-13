@@ -1,0 +1,110 @@
+##### APPLY 004_quotes_trips.sql (psql -1 -v ON_ERROR_STOP=1)
+CREATE TABLE
+CREATE TRIGGER
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE TRIGGER
+CREATE TABLE
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+##### SHOW after 004
+                 List of relations
+ Schema |          Name          | Type  |  Owner   
+--------+------------------------+-------+----------
+ public | audit_log              | table | ridehail
+ public | driver                 | table | ridehail
+ public | fare_quote             | table | ridehail
+ public | rider                  | table | ridehail
+ public | setting                | table | ridehail
+ public | status_transition_rule | table | ridehail
+ public | support_admin          | table | ridehail
+ public | trip                   | table | ridehail
+ public | trip_status_history    | table | ridehail
+ public | vehicle                | table | ridehail
+(10 rows)
+
+         tbl         |             conname              | contype 
+---------------------+----------------------------------+---------
+ fare_quote          | fare_quote_id_rider_id_key       | u
+ fare_quote          | fare_quote_pkey                  | p
+ fare_quote          | quote_amount_not_negative        | c
+ fare_quote          | quote_coordinates_valid          | c
+ fare_quote          | quote_currency_ngn               | c
+ fare_quote          | quote_estimates_not_negative     | c
+ fare_quote          | quote_expires_after_created      | c
+ fare_quote          | quote_rider_id_fkey              | f
+ trip                | trip_amounts_not_negative        | c
+ trip                | trip_cancelled_by_valid          | c
+ trip                | trip_cancelled_has_facts         | c
+ trip                | trip_completed_has_facts         | c
+ trip                | trip_currency_ngn                | c
+ trip                | trip_driver_id_fkey              | f
+ trip                | trip_driver_matches_status       | c
+ trip                | trip_fare_quote_id_key           | u
+ trip                | trip_fee_needs_driver            | c
+ trip                | trip_fee_only_when_rider_cancels | c
+ trip                | trip_pkey                        | p
+ trip                | trip_quote_belongs_to_rider      | f
+ trip                | trip_rider_id_fkey               | f
+ trip                | trip_snapshots_match_assignment  | c
+ trip                | trip_started_has_time            | c
+ trip                | trip_status_valid                | c
+ trip                | trip_times_in_order              | c
+ trip                | trip_vehicle_belongs_to_driver   | f
+ trip_status_history | history_actor_admin_fkey         | f
+ trip_status_history | history_actor_driver_fkey        | f
+ trip_status_history | history_actor_matches_role       | c
+ trip_status_history | history_actor_rider_fkey         | f
+ trip_status_history | history_first_row_is_requested   | c
+ trip_status_history | history_from_status_valid        | c
+ trip_status_history | history_status_changes           | c
+ trip_status_history | history_to_status_valid          | c
+ trip_status_history | history_trip_id_fkey             | f
+ trip_status_history | trip_status_history_pkey         | p
+ audit_log           | audit_actor_admin_fkey           | f
+ audit_log           | audit_actor_driver_fkey          | f
+ audit_log           | audit_actor_matches_role         | c
+ audit_log           | audit_actor_rider_fkey           | f
+ audit_log           | audit_entity_id_matches_type     | c
+ audit_log           | audit_entity_type_valid          | c
+ audit_log           | audit_log_pkey                   | p
+(43 rows)
+
+         tbl         |         tgname          
+---------------------+-------------------------
+ fare_quote          | append_only_guard
+ trip                | set_updated_at
+ trip                | trip_block_delete
+ trip                | trip_enforce_transition
+ trip                | trip_write_history
+ trip_status_history | append_only_guard
+ audit_log           | append_only_guard
+(7 rows)
+
+         index_name         |         tbl         
+----------------------------+---------------------
+ fare_quote_pkey            | fare_quote
+ fare_quote_id_rider_id_key | fare_quote
+ trip_pkey                  | trip
+ trip_fare_quote_id_key     | trip
+ trip_one_active_per_rider  | trip
+ trip_one_active_per_driver | trip
+ trip_status_history_pkey   | trip_status_history
+ audit_log_pkey             | audit_log
+(8 rows)
+
+##### ROW COUNTS after 004
+fare_quote 0
+trip 0
+trip_status_history 0
+audit_log 0

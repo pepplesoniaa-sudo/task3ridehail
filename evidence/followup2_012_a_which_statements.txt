@@ -1,0 +1,45 @@
+##### which db\queries statements use trip_status_history_trip_idx? EXPLAIN of every statement that reads trip_status_history in a loop over the files
+SET
+--- proofs_migration_010 0a: counts per trip (GROUP BY trip_id)
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Aggregate
+   ->  GroupAggregate
+         Group Key: trip_status_history.trip_id
+         Filter: (count(*) > 1)
+         ->  Index Only Scan using trip_status_history_trip_idx on trip_status_history
+(5 rows)
+--- proofs_migration_010 0b: chain check ordered by seq (whole table)
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   ->  Subquery Scan on x
+         Filter: (((x.rn = 1) AND (x.from_status IS NOT NULL)) OR ((x.rn > 1) AND (x.from_status IS DISTINCT FROM x.prev_to)))
+         ->  WindowAgg
+               ->  Index Scan using trip_status_history_trip_seq_idx on trip_status_history
+(5 rows)
+--- proofs_migration_010 0c: the LEGACY order, ordered by created_at then id (whole table)
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   ->  Subquery Scan on x
+         Filter: (((x.rn = 1) AND (x.from_status IS NOT NULL)) OR ((x.rn > 1) AND (x.from_status IS DISTINCT FROM x.prev_to)))
+         ->  WindowAgg
+               ->  Incremental Sort
+                     Sort Key: trip_status_history.trip_id, trip_status_history.created_at, trip_status_history.id
+                     Presorted Key: trip_status_history.trip_id, trip_status_history.created_at
+                     ->  Index Scan using trip_status_history_trip_idx on trip_status_history
+(8 rows)
+--- proofs_followup2_a_c: the 62-trip query (window ordered by seq over the whole table inside an IN)
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Group
+   Group Key: trip_status_history.trip_id
+   ->  Merge Semi Join
+         Merge Cond: (trip_status_history.trip_id = x.trip_id)
+         ->  Index Only Scan using trip_status_history_trip_idx on trip_status_history
+         ->  Subquery Scan on x
+               Filter: (((x.rn = 1) AND (x.from_status IS NOT NULL)) OR ((x.rn > 1) AND (x.from_status IS DISTINCT FROM x.prev_to)))
+               ->  WindowAgg
+                     ->  Index Scan using trip_status_history_trip_seq_idx on trip_status_history trip_status_history_1
+(9 rows)

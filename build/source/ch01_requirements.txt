@@ -1,0 +1,48 @@
+# Chapter 1. Requirements
+@SRC docs/01_requirements.md
+@P Riders request trips and see a fare estimate. Drivers accept and drive them; riders pay through an outside provider. Both sides rate each other; support can investigate any trip.
+
+## 1. Users
+@B U1 Rider.
+@B U2 Driver.
+@B U3 Support admin: reads trips and payments, cancels, refunds.
+@B U4 Payment provider: external system; may report results twice or late.
+
+## 2. Five key actions
+@P Proposal kept unchanged: the five cover the money path. Cancellation (B9) is a state change, not a sixth action; the state machine handles it (B5).
+@B A1 Rider requests a trip (pickup, dropoff, estimate). Success: one "requested" trip with a stored estimate. Fails: missing locations, outside service area, rider already active (B1), retry (B6).
+@B A2 Driver accepts. Success: exactly one driver assigned. Fails: two accept at once, driver already active (B2), rider cancelled first.
+@B A3 Driver moves trip to arrived, started, completed; rider watches. Success: steps recorded in order. Fails: steps skipped or repeated, location updates lost.
+@B A4 Rider pays. One payment covers exactly one fare or one cancellation fee. Fails: declined card, timeout, duplicate callback. A retried payment request creates no second charge (B6).
+@B A5 Both rate each other. Success: one rating per person per trip. Fails: trip not completed, window passed, rated twice (B7).
+
+## 3. Rules that must always hold
+@P Trip statuses: requested, assigned, arrived, started, completed, cancelled. Completed and cancelled are terminal. Refunds are rows on the payment side. A dispute is only a support note in the audit log.
+@B B0 A trip is ACTIVE in the statuses requested, assigned, arrived and started.
+@B B1 A rider has at most one active trip. Enforced by a database unique index.
+@B B2 A driver has at most one active trip. Same enforcement. A trip with no driver yet counts for the rider only.
+@B B3 Money is whole kobo in integer columns, currency NGN only. Enforced by column types and a currency check. A decimal amount is stopped by API validation, not by the column type (the database rounds 10.5 kobo to 11; see docs\04 question 2).
+@B B4 After completion, fare, distance, start and end times, rider and driver are frozen. Only updated_at may change. Enforced by a database trigger. Corrections and partial refunds are new rows.
+@B B5 Every status change is recorded (who, when, from, to); only legal changes are allowed.
+@B B6 Idempotency keys are unique per rider and action, not global. A retried request must not create a second trip or a second charge; it returns the stored result unchanged. Provider payment references are unique.
+@B B7 A rating needs a completed trip and a participant, within 7 days of completion, once per person per trip.
+@B B8 Personal data (names, phone numbers, locations) follows Nigeria's NDPA 2023: collect only what is needed, allow deletion, restrict access. Retention periods are NOT verified and need legal advice.
+@B B9 Rider, driver or support may cancel from requested, assigned or arrived. The system cancels a requested trip no one accepted after request_timeout_seconds, with no fee (placeholder 600 seconds, needs owner approval, held in a settings row). After started, only support. A flat fee applies after assignment, none before. The fee is 50000 kobo (500 naira), a placeholder approved by the owner and held in a settings row, not hard coded.
+@B B10 The sum of refunds on a payment never exceeds the payment amount.
+
+## 4. Non goals
+@B Matching algorithm, a live map or route display, surge pricing, promo codes, driver payouts, tax, multi-city and mobile apps are out of scope.
+@B The rider sees the driver's latest position through the event stream (EP27), but no map or route is drawn.
+@B A full dispute system is out of scope, and a money record for a manual refund of a failed payment is a known gap: its trace is provider_event plus audit_log.
+
+## 5. Open questions
+@TBL 9
+ID | Question | Status
+Q1 | Currency: NGN only, kobo (B3). | ANSWERED
+Q2 | Cancellation fee: flat after assignment (B9). | ANSWERED
+Q3 | Rating window: 7 days (B7). | ANSWERED
+Q4 | Refunds: partial allowed, as new rows (B4). | ANSWERED
+Q5 | Location retention: blocked on legal advice. No retention period is chosen. | OPEN
+Q6 | An assigned driver never arrives and the rider is charged the fee if they cancel. Needs an owner decision before launch. Recommended: no fee when the driver is more than a stated number of minutes late, held in a setting. Not built here. | OPEN
+@END
+@P Q5 (location retention) and Q6 (a driver who never arrives) are left open on purpose; they are carried forward to chapter 10.

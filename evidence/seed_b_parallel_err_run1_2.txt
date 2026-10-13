@@ -1,0 +1,2 @@
+ERROR:  integer out of range
+CONTEXT:  PL/pgSQL function inline_code_block line 16 at assignment

@@ -1,0 +1,112 @@
+# Chapter 3. The seven hard questions
+@SRC docs/04_hard_questions.md
+@P Each answer has: question, answer, reason, requirement IDs, enforcer. CONFIRMED means I ran it and kept the output (the numbered tests are listed in the report). INFERRED means I reasoned it. Table and field names match 02_entities.md. The status rules are in 03_state_machine.md.
+## Question 1. Normalisation: where does each fact live?
+@P Each fact lives in exactly one home table, and everything else finds it by a foreign key. Exceptions are the deliberate denormalisations below, each with its own reason and its own way of staying correct.
+@TBL 9
+Fact | Home | How others find it
+A person's name, phone | rider, driver, support_admin | trip.rider_id, trip.driver_id, actor columns
+Who paid for a trip | trip.rider_id | payment has no rider column; join through trip
+Who is rated, and who rated | trip (rider_id, driver_id) + rating.rater_role | rating has no ratee column; join through trip
+Whose car it is | vehicle.driver_id | trip.vehicle_id, with the composite FK
+Pickup and dropoff coordinates | fare_quote | trip joins to its quote; not copied
+Pickup and dropoff address text | trip (the only copy) | n/a
+Fare price rules, fee, rating window | setting | read at the time they are needed
+Legal status moves | status_transition_rule | read by triggers
+@END
+@P No copy means no copy can disagree (B4, B6). The one-copy rule also makes erasure under B8 possible: a name stored in six tables must be found and cleared in six tables.
+@CODE
+Denormalisation 1: HISTORY snapshot.
+trip.driver_name_snapshot and trip.vehicle_plate_snapshot copy the driver's
+name and the car's plate at the moment of assignment. Also
+trip.cancellation_fee_minor copies the setting at the moment of cancellation.
+Why: these are facts about the past. A driver may later change name, or sell
+the car, or the owner may change the fee. An old receipt must still say what
+was true then (B4).
+@END
+@CODE
+Denormalisation 2: SPEED cache.
+rider.rating_sum, rider.rating_count, driver.rating_sum, driver.rating_count
+hold running totals of the stars each person received.
+Why: showing "4.8 stars" on every trip screen would otherwise mean adding up
+thousands of rating rows each time. I store integer totals, not an average.
+@END
+@P The two real denormalisations are the HISTORY snapshot and the SPEED cache. The derived copies trip.started_at, trip.completed_at and trip.cancelled_at repeat times that also exist in trip_status_history; the history row is the original, and the trip column can always be recomputed from it. They are written by the same update that makes the history row (triggers trip_enforce_transition and trip_write_history), so they agree.
+@P The repair-and-detect query below recomputes the truth from the rating table. Run it daily and alarm if it returns any row. It has not been scheduled, because no job runner exists (the tables exist now; the query is INFERRED to be correct by reading it, not by running it on a schedule). See docs/10_brief_checklist.md section 3, the strictness note.
+@CODE
+-- Drivers whose cache disagrees with the rating rows (rider side is the mirror image).
+SELECT d.id, d.rating_sum, d.rating_count,
+       COALESCE(SUM(r.stars),0) AS true_sum, COUNT(r.id) AS true_count
+FROM driver d
+LEFT JOIN trip t   ON t.driver_id = d.id
+LEFT JOIN rating r ON r.trip_id = t.id AND r.rater_role = 'rider'
+GROUP BY d.id
+HAVING d.rating_sum <> COALESCE(SUM(r.stars),0) OR d.rating_count <> COUNT(r.id);
+@END
+@P IDs. B4, B5, B7, B8, A5. Enforcers. triggers trip_enforce_transition, trip_write_history, rating_update_cache; checks trip_snapshots_match_assignment, rider_rating_cache_valid, driver_rating_cache_valid.
+## Question 2. Money
+@P Money is a whole number of kobo in a bigint column, with a char(3) currency column beside it, always NGN.
+@P Every money field in 02_entities.md:
+@TBL 9
+Table | Amount field | Currency field
+fare_quote | amount_minor | currency
+trip | fare_amount_minor | fare_currency
+trip | cancellation_fee_minor | cancellation_fee_currency
+payment | amount_minor | currency
+refund | amount_minor | currency
+provider_event | amount_minor (optional) | currency (optional, filled together with the amount)
+setting | int_value, only for the keys ending in _minor (cancellation_fee_minor, base_fare_minor, per_km_minor, per_minute_minor) | currency
+@END
+@P That is 7 amount columns, each with its own currency column beside it (7 currency columns). provider_event.amount_minor was added in this fix, so the count went from 6 to 7. The setting column holds four different money keys, but they share one column. fare_quote.estimated_distance_m and trip.distance_m are distances, not money.
+@P The test is CONFIRMED, a rolled back transaction on ridehail_design, PostgreSQL 16.15: a value of 10.5 kobo becomes 11, and 11.5 becomes 12, with no error, while the text "10.5" is refused as an invalid bigint. What that means for the API, in order: API validation is the only layer that can reject 10.5, by demanding a whole number (JSON type integer) before the value reaches the database, and this is application code. The bigint type blocks decimals only for text-typed parameters, which is a side effect, not a guarantee. A check constraint cannot help, because it runs after the rounding and only sees 11.
+@P Reason. Binary floats cannot hold 0.1 exactly, so sums of floats drift by fractions of a kobo. Whole kobo add and compare exactly. Fares computed from per-kilometre prices need one rounding rule; that rule belongs in one function in the API stage, not in a trigger (INFERRED; the contract now states one rounding rule, applied once at the end, in 06 EP01, design assumption D16).
+@P IDs. B3, B10, A1, A4, Q1. Enforcers. API validation (decimals); check constraints (sign, currency); the column type (storage).
+## Question 3. Status and state
+@P The full tables, forbidden moves, diagrams and the trigger test are in 03_state_machine.md. The rules from that table that matter most, and the enforcer for each:
+@TBL 9
+Rule | Enforcer
+One active trip per rider (B0, B1) | partial unique index trip_one_active_per_rider
+One active trip per driver (B0, B2) | partial unique index trip_one_active_per_driver
+Support fails a stuck payment only with proof (A4, B6) | rule row P3 (actor support) + trigger payment_enforce_rules, which looks up a payment_not_found row in provider_event (03 section 4b, tested)
+A completed trip is frozen (B4) | trigger trip_enforce_transition; deletes blocked by trip_block_delete
+Payment moves need a rule row (A4) | table status_transition_rule + trigger payment_enforce_rules
+Refunds never exceed the payment (B10) | trigger refund_enforce_total
+@END
+@P The remaining rules of this table, and their enforcers, are covered in chapter 4 and chapter 5.
+@P The rating rule (a rating needs a completed trip) is NOT in this table; it is found in the table of invalid states in chapter 5.
+@P Reason. See section 5 of 03_state_machine.md. In short: checks see one row, triggers see old and new rows and other tables, unique indexes are atomic.
+@P IDs. B0, B1, B2, B4, B5, B6, B9, B10, A1 to A4. Enforcer. as listed.
+## Question 4. Time, deletion and personal data
+@P Every table has created_at and updated_at (timestamptz, NOT NULL, default now()). The trigger set_updated_at refreshes updated_at on tables that are updated: rider, driver, vehicle, trip, payment, provider_event, idempotency_key, setting, support_admin. On the append-only tables updated_at equals created_at for ever (decision 3). I use timestamptz so a stored time is an exact moment, not a clock reading without a zone.
+@TBL 9
+Table | Delete style | Reason
+rider, driver, vehicle, support_admin | Soft delete: set deleted_at, blank personal fields | Other rows point at them. A hard delete would break the foreign keys or destroy the financial record (B4). A soft delete lets the person leave (B8) while the money trail stays.
+trip, payment, refund, provider_event, trip_status_history, fare_quote, rating, audit_log | Never deleted | These are the financial and audit record (B4, B5, B10). Personal text inside them is blanked, not the row.
+location_ping | Hard delete once a retention period exists | Raw location is the most sensitive data and has no value after the trip is settled. No period is chosen (Q5), so no deletion job is designed yet.
+idempotency_key | Hard delete after expires_at | It only exists to make a retry safe for a short time.
+setting, status_transition_rule | Not deleted in normal use | Reference data. Changes to settings are written to audit_log by trigger setting_write_audit.
+@END
+@P What happens to a deleted rider's trips and payments. They stay. The rider row is anonymised: full_name becomes the text Deleted rider, phone becomes the word deleted followed by the rider's id (so it is still unique and still not empty), email is cleared, deleted_at is set. The rider's trips, payments and refunds keep their ids and amounts, because a business must keep a record of money (B4). The rider's pickup_address and dropoff_address on old trips are replaced with the text erased, and rating comments are cleared. The same is done for a driver (driver_name_snapshot, vehicle_plate_snapshot; the driver's vehicles get deleted_at and a blanked plate). A person with an active trip cannot be erased until the trip ends. This is now checked inside the erasure function, so it is a database rule, not application code (tested for riders, step X6 below).
+@P A conflict you must approve (decision 1). B4 as edited says that after completion only updated_at may change. Blanking an address on a completed trip changes more than updated_at. So B4 and B8 pull against each other. My recommendation: keep B4 for every money, distance, time, party and status field, and allow exactly five text columns to be blanked: pickup_address, dropoff_address, driver_name_snapshot, vehicle_plate_snapshot (on trip) and comment (on rating). Only a dedicated erasure function may do it. If you reject this, the alternative is to keep addresses for ever and rely on a lawful exemption, which I cannot judge.
+@P How the erasure right is protected. The earlier app.erasure flag idea was weak, because any code that could talk to the database could set it, so the new design ties the right to a database role. Role ridehail_erasure_owner is NOLOGIN (nobody can connect as it) and not a superuser; it owns the functions erase_rider(uuid) and erase_driver(uuid), which are SECURITY DEFINER (they run with their owner's rights) with a fixed search_path so a caller cannot trick them into using another table. Role ridehail_app is the role the API connects as; it may EXECUTE the two functions and has no other route to the erased columns, and EXECUTE is revoked from everyone else (PUBLIC). The freeze trigger on trip (inside trip_enforce_transition) and the trigger rating_block_change allow those five columns to change only when current_user is ridehail_erasure_owner, and refuse any other column. The dev login ridehail used in this project is a superuser (CONFIRMED: rolsuper = t), and a superuser can bypass anything, so the API must never connect as ridehail. That is a deployment rule for Stage 3.
+@P Gaps I did not solve. Pickup and dropoff coordinates inside fare_quote are also personal data and the quote is append-only, so this design does not erase them. Retention periods for every personal field (and the NDPA's rules on erasure versus keeping financial records) are NOT verified and need legal advice (B8, Q5).
+@P Soft delete against hard delete, and the compliance reasoning behind the choice. People are anonymised, not removed: rider, driver, vehicle and support_admin take a soft delete (deleted_at is set) and their personal fields are blanked, because other rows point at them and the money trail must stay (B4, B8). Financial and audit rows are kept for ever: trip, payment, refund, provider_event, trip_status_history, fare_quote, rating and audit_log are never deleted, because they are the financial and audit record (B4, B5, B10), and only the personal text inside them is blanked. Raw location is deleted after a retention period: location_ping is the most sensitive data and has no value once the trip is settled, so it is a hard delete, and because the period is not chosen yet no deletion job is designed. Short lived keys are deleted: idempotency_key is a hard delete after expires_at, because it only exists to make a retry safe for a short time. The legal position is not verified: this is a design view, not legal advice, the Nigeria Data Protection Act 2023 was not read for this task, the balance between a right to erasure and a duty to keep financial records is not settled here, and a qualified adviser must confirm the retention periods and the soft against hard delete choice before it is relied on.
+@P IDs. B8, B4, B5, B10, Q5. Enforcers. trigger set_updated_at; trigger append_only_guard; trigger trip_block_delete; foreign keys with ON DELETE RESTRICT; functions erase_rider and erase_driver with role ridehail_erasure_owner; role ridehail_app (execute only).
+## Question 5. Identifiers
+@P Every record id is a random UUID, generated by the database with gen_random_uuid(), not a counting number. Exceptions are setting.key and status_transition_rule's four-column key, which are names, not records.
+@P Security reason. A counting id (1, 2, 3...) lets a stranger try 4417, 4418 and read the neighbours' trips, and it tells competitors how many trips you have. A random id of 122 random bits cannot be guessed in practice. A random id is NOT authorisation: anyone who learns an id (from a log, a screenshot, a shared link or a browser history) can send it, so every endpoint must still check ownership. A rider may read a trip only if trip.rider_id is their own id, a driver only if trip.driver_id is theirs, and support only with a support role. Without that check the random id gives no protection at all. These checks are application code, and the database cannot do them for you.
+@P Generation method and test (CONFIRMED, rolled back transaction, PostgreSQL 16.15): three inserted rows each got a version 4 uuid, the ids were distinct, pgcrypto was not installed, and 0 tables were left after ROLLBACK. gen_random_uuid() is built into PostgreSQL 13 and later (INFERRED from the PostgreSQL release notes, not checked this session; CONFIRMED that it works on this 16.15 server without pgcrypto). That removes one extension to install. Random ids insert into the middle of an index instead of the end, which costs some speed at very large sizes (INFERRED; not measured). I judged that acceptable and keep one rule for all tables, including location_ping (decision 9).
+@P Note. Q5 is open, and it points to chapter 10.
+@P IDs. B6 (retry-safe ids), B8 (not leaking volumes of personal data). Enforcers. column default gen_random_uuid() (database); ownership checks (application code only).
+## Question 6. Constraints
+@P Constraints are covered in full in chapter 5, where every table is listed and the table of invalid states that are now impossible is set out. This chapter points to chapter 5 for the full treatment.
+## Question 7. Indexes
+@P Indexes are covered in full in chapter 5, which lists each index that earns its place by a named query and the tables that are left without extra indexes on purpose. This chapter points to chapter 5 for the full treatment.
+## Summary. The seven answers
+@P Question 1: each fact lives in exactly one home table and everything else finds it by a foreign key, with two deliberate denormalisations, the HISTORY snapshot and the SPEED cache.
+@P Question 2: money is a whole number of kobo in a bigint column with a char(3) currency column beside it, always NGN, and only API validation can reject a decimal amount.
+@P Question 3: status and state are enforced by the status_transition_rule table, triggers, partial unique indexes and check constraints.
+@P Question 4: every table has created_at and updated_at, people are soft deleted while financial and audit rows are never deleted, and only the erasure function may blank the five personal text columns.
+@P Question 5: every record id is a random UUID generated with gen_random_uuid(), and every endpoint must still check ownership.
+@P Question 6: constraints are covered in full in chapter 5.
+@P Question 7: indexes are covered in full in chapter 5.

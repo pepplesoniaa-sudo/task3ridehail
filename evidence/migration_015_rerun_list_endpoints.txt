@@ -1,0 +1,122 @@
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+=== L1 worked example, page 1: the rider app asks for limit 3 (the API fetches limit + 1 = 4 rows to know whether another page exists)
+                  id                  |  status   |          created_at           | fare_amount_minor | cancellation_fee_minor 
+--------------------------------------+-----------+-------------------------------+-------------------+------------------------
+ 40000000-0000-0000-0000-000000198904 | completed | 2026-10-04 08:33:32.458283+00 |            108000 |                       
+ 40000000-0000-0000-0000-000000193904 | completed | 2026-09-25 16:13:32.458283+00 |            108000 |                       
+ 40000000-0000-0000-0000-000000188904 | completed | 2026-09-16 23:53:32.458283+00 |            108000 |                       
+ 40000000-0000-0000-0000-000000183904 | completed | 2026-09-08 07:33:32.458283+00 |            108000 |                       
+(4 rows)
+
+=== L2 page 2: the cursor carries the (created_at, id) of the LAST item of page 1 (item 3)
+    (the values below are taken from the third row of L1)
+                  id                  |  status   |          created_at           
+--------------------------------------+-----------+-------------------------------
+ 40000000-0000-0000-0000-000000183904 | completed | 2026-09-08 07:33:32.458283+00
+ 40000000-0000-0000-0000-000000178904 | completed | 2026-08-30 15:11:02.602062+00
+ 40000000-0000-0000-0000-000000173904 | completed | 2026-08-21 22:51:02.602062+00
+ 40000000-0000-0000-0000-000000168904 | completed | 2026-08-13 06:31:02.602062+00
+(4 rows)
+
+=== L3 filter by status (completed or cancelled) and a date range, page 1, limit 5
+                  id                  |  status   |          created_at           
+--------------------------------------+-----------+-------------------------------
+ 40000000-0000-0000-0000-000000138904 | completed | 2026-06-22 04:25:18.639945+00
+ 40000000-0000-0000-0000-000000133904 | completed | 2026-06-13 12:05:18.639945+00
+ 40000000-0000-0000-0000-000000128904 | completed | 2026-06-04 19:45:18.639945+00
+ 40000000-0000-0000-0000-000000123904 | completed | 2026-05-27 03:25:18.639945+00
+ 40000000-0000-0000-0000-000000118904 | completed | 2026-05-18 11:02:18.011182+00
+ 40000000-0000-0000-0000-000000113904 | completed | 2026-05-09 18:42:18.011182+00
+(6 rows)
+
+=== P1 plan: no filter, no cursor (rider)
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Limit
+   ->  Index Scan using trip_rider_history_idx on trip
+         Index Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+(3 rows)
+
+=== P2 plan: status filter (rider)
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Limit
+   ->  Index Scan using trip_rider_history_idx on trip
+         Index Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+         Filter: (status = ANY ('{completed,cancelled}'::text[]))
+(4 rows)
+
+=== P3 plan: date range (rider)
+                                                                                      QUERY PLAN                                                                                      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Index Only Scan using trip_rider_history_idx on trip
+         Index Cond: ((rider_id = '10000000-0000-0000-0000-000000000777'::uuid) AND (created_at >= (now() - '200 days'::interval)) AND (created_at < (now() - '100 days'::interval)))
+(3 rows)
+
+=== P4 plan: cursor + status + date range together (rider)
+                                                                                                                                             QUERY PLAN                                                                                                                                             
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Index Scan using trip_rider_history_idx on trip
+         Index Cond: ((rider_id = '10000000-0000-0000-0000-000000000777'::uuid) AND (created_at >= (now() - '200 days'::interval)) AND (created_at < (now() - '100 days'::interval)) AND (ROW(created_at, id) < ROW((now() - '150 days'::interval), 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)))
+         Filter: (status = ANY ('{completed}'::text[]))
+(4 rows)
+
+=== P5 plan: driver, no filter
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Limit
+   ->  Index Only Scan using trip_driver_history_idx on trip
+         Index Cond: (driver_id = '20000000-0000-0000-0000-000000000500'::uuid)
+(3 rows)
+
+=== P6 plan: driver, cursor + status
+                                                                                           QUERY PLAN                                                                                           
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Index Scan using trip_driver_history_idx on trip
+         Index Cond: ((driver_id = '20000000-0000-0000-0000-000000000500'::uuid) AND (ROW(created_at, id) < ROW((now() - '150 days'::interval), 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)))
+         Filter: (status = ANY ('{completed}'::text[]))
+(4 rows)
+
+=== P7 a sort the contract refuses (ORDER BY fare_amount_minor) would need a sort of all the rider trips: shown only to explain why the API does not offer it
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: fare_amount_minor DESC NULLS LAST, id
+         ->  Bitmap Heap Scan on trip
+               Recheck Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+               ->  Bitmap Index Scan on trip_rider_history_idx
+                     Index Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+(7 rows)
+
+=== P8 open requests for drivers (bounded list, not keyset): the A2.1 query with limit 20
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: t.created_at
+         ->  Nested Loop
+               ->  Bitmap Heap Scan on trip t
+                     Recheck Cond: ((status = ANY ('{requested,assigned,arrived,started}'::text[])) AND (status = 'requested'::text))
+                     ->  BitmapAnd
+                           ->  Bitmap Index Scan on trip_one_active_per_driver
+                           ->  Bitmap Index Scan on trip_requested_created_at_idx
+               ->  Index Scan using fare_quote_pkey on fare_quote q
+                     Index Cond: (id = t.fare_quote_id)
+                     Filter: ((pickup_latitude >= 6.475) AND (pickup_latitude <= 6.495) AND (pickup_longitude >= 3.385) AND (pickup_longitude <= 3.405))
+(12 rows)
+
+=== counts for the example
+ trips_of_rider_777 | trips_of_driver_500 
+--------------------+---------------------
+                 40 |                 249
+(1 row)
+

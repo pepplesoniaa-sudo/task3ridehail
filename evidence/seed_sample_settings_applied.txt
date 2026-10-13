@@ -1,0 +1,58 @@
+BEGIN
+SET
+  applied_as  
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+INSERT 0 10
+COMMIT
+                   key                    | int_value | currency |                  description                  
+------------------------------------------+-----------+----------+-----------------------------------------------
+ base_fare_minor                          |     50000 | NGN      | PLACEHOLDER, needs owner: flat starting price
+ cancellation_fee_minor                   |     50000 | NGN      | Flat fee in kobo when a rider cancels after a
+ payment_reconcile_after_seconds          |       900 |          | Seconds a payment may stay pending before rec
+ payment_reconcile_check_interval_seconds |       300 |          | PLACEHOLDER, needs owner: how often the payme
+ per_km_minor                             |     15000 | NGN      | PLACEHOLDER, needs owner: price per kilometre
+ per_minute_minor                         |      3000 | NGN      | PLACEHOLDER, needs owner: price per minute, 3
+ quote_validity_seconds                   |       300 |          | PLACEHOLDER, needs owner: seconds a fare quot
+ rating_window_days                       |         7 |          | Days after completion in which a rating is ac
+ request_timeout_check_interval_seconds   |        60 |          | PLACEHOLDER, needs owner: how often the timeo
+ request_timeout_seconds                  |       600 |          | Seconds before the system cancels an unaccept
+ service_area_max_lat_e6                  |   6700000 |          | PLACEHOLDER, needs owner: northern edge of th
+ service_area_max_lon_e6                  |   3700000 |          | PLACEHOLDER, needs owner: eastern edge of the
+ service_area_min_lat_e6                  |   6380000 |          | PLACEHOLDER, needs owner: southern edge of th
+ service_area_min_lon_e6                  |   3100000 |          | PLACEHOLDER, needs owner: western edge of the
+(14 rows)
+
+         at          | actor_role |            actor_admin_id            |     action     |                   key                    | old | new 
+---------------------+------------+--------------------------------------+----------------+------------------------------------------+-----+-----
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | service_area_max_lat_e6                  |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | service_area_max_lon_e6                  |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | service_area_min_lon_e6                  |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | base_fare_minor                          |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | per_km_minor                             |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | per_minute_minor                         |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | quote_validity_seconds                   |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | service_area_min_lat_e6                  |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | request_timeout_check_interval_seconds   |     | 
+ 2026-10-07 14:05:18 | support    | dddddddd-0000-0000-0000-000000000001 | setting_change | payment_reconcile_check_interval_seconds |     | 
+(10 rows)
+
+                             details                             
+-----------------------------------------------------------------
+ {"to": 15000, "key": "per_km_minor", "from": null}
+ {"to": 3100000, "key": "service_area_min_lon_e6", "from": null}
+ {"to": 50000, "key": "base_fare_minor", "from": null}
+(3 rows)
+
+ setting_rows 
+--------------
+           14
+(1 row)
+

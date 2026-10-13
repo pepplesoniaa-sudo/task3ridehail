@@ -1,0 +1,7 @@
+--- sender session (a different backend, role ridehail_app), the same moment:
+SET
+      cu      | sender_backend_pid | pg_notify 
+--------------+--------------------+-----------
+ ridehail_app |                273 | 
+(1 row)
+

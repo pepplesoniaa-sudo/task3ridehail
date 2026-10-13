@@ -1,0 +1,35 @@
+##### before VACUUM: dead tuples and vacuum history of trip
+  relname   | n_live_tup | n_dead_tup |        last_autovacuum        | last_vacuum |       last_autoanalyze        
+------------+------------+------------+-------------------------------+-------------+-------------------------------
+ fare_quote |     200012 |          5 | 2026-10-06 18:11:06.520949+00 |             | 2026-10-06 18:11:08.37975+00
+ payment    |     169410 |       7411 | 2026-10-06 18:44:20.480494+00 |             | 2026-10-06 18:44:22.53077+00
+ trip       |     200012 |      32441 | 2026-10-06 18:44:36.650559+00 |             | 2026-10-06 18:44:42.514638+00
+(3 rows)
+
+             index             |  size   
+-------------------------------+---------
+ trip_driver_history_idx       | 32 MB
+ trip_fare_quote_id_key        | 20 MB
+ trip_pkey                     | 20 MB
+ trip_rider_history_idx        | 17 MB
+ trip_requested_created_at_idx | 2672 kB
+ trip_one_active_per_rider     | 1832 kB
+ trip_one_active_per_driver    | 1616 kB
+(7 rows)
+
+##### VACUUM (ANALYZE) trip, payment
+VACUUM
+VACUUM
+vacuum seconds: 9.0
+##### after VACUUM
+             index             |  size   
+-------------------------------+---------
+ trip_driver_history_idx       | 32 MB
+ trip_fare_quote_id_key        | 20 MB
+ trip_pkey                     | 20 MB
+ trip_rider_history_idx        | 17 MB
+ trip_requested_created_at_idx | 2672 kB
+ trip_one_active_per_rider     | 1832 kB
+ trip_one_active_per_driver    | 1616 kB
+(7 rows)
+

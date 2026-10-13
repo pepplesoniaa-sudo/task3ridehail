@@ -1,0 +1,94 @@
+# Chapter 8. Real time
+@SRC docs/08_real_time.md
+## The place and the choice
+@P A3, the rider watching the trip. After a rider requests a trip, the rider app needs to know without asking again: the trip was accepted (assigned), the driver arrived, the trip started, it completed or was cancelled, and while the driver approaches, the driver's latest position. Two kinds of updates:
+@B Status changes. Rare (at most about 6 per trip), important, must never be lost or reordered. They are rows of trip_status_history, ordered by the seq column.
+@B Location pings. Frequent (the driver app sends one about every second through POST /v1/trips/{trip_id}/locations, EP13), only the latest matters, losing one is harmless.
+@P Today the only way is polling EP03 (status) and EP05 (latest ping).
+## Comparing Server Sent Events and WebSockets
+@TBL 9
+Question | Server-Sent Events | WebSocket
+Direction of traffic | One way: server to client. The rider only receives. The driver's phone sends pings by an ordinary POST (EP13), which the API already has and which carries authentication, ownership check, rate limit and idempotency rules per request. | Two ways on one connection. The rider app has nothing to send, so half of the channel is unused; and pings sent over a socket would need their own authentication and validation path.
+Reconnection and resume | Built in for browsers: the client reconnects by itself and sends the Last-Event-ID header with the last id: it saw. The server resumes from there. Native app clients must implement the same rule (a few lines), INFERRED. | None built in. The application must invent its own resume message and its own reconnect timer.
+Proxies and load balancers | It is a normal HTTP response that never ends, so it passes most proxies. It needs response buffering switched off (Cache-Control: no-store, X-Accel-Buffering: no) and a heartbeat shorter than the idle timeout of every hop (a comment line every 20 seconds). INFERRED. | Needs Upgrade support at every hop; some corporate proxies and older middleboxes break it. INFERRED.
+HTTP versions and the browser connection limit | Over HTTP/1.1 a browser allows about 6 connections per host, and every open stream uses one, so many tabs of the same app can starve ordinary requests. A rider watches one trip, so it is one stream; over HTTP/2 streams share one connection. INFERRED. | Not held in the HTTP connection pool in the same way; its limits are different. INFERRED.
+Mobile battery and background | A held connection keeps the radio awake. Both phone operating systems suspend network connections of an app in the background, so a stream only works while the app is in the foreground; "the driver arrived" in the background needs a push notification (outside this design). Sending a location event at most every 2 seconds, and only when it changed, limits radio use. INFERRED. | The same background rule applies. A socket needs its own keep-alive ping to survive network changes. INFERRED.
+Authentication of the stream | The stream is a GET, so it carries Authorization: Bearer ... like every endpoint (section 5, "Long lived token problem"). The browser EventSource object cannot set headers; a fetch-based client or a library can. A token must never be put in the URL (it ends up in logs). INFERRED. | Browsers cannot set headers on the first WebSocket request either; the usual workarounds are a token in the URL or a first message. Both need more care than a header. INFERRED.
+Scale | One open connection per watching rider; it holds a file descriptor and a small buffer on one API instance. I did not measure memory per connection. The number to plan with is open streams per instance, to be measured under load. | The same. A socket server also keeps per-connection state for the application protocol.
+What is sent | Status events from trip_status_history in seq order (the id: of each event is its seq), the latest ping as a location event, a heartbeat, and an end event. | The same messages, but the application defines the framing and acknowledgements.
+@END
+## The recommendation
+@P Use SSE. The rider only receives, so a unidirectional channel is enough: SSE is plain HTTP, it resumes with a standard header, its authentication is the same as every other endpoint, and pings stay on the POST that already exists.
+@P Switch to WebSockets when the client needs to send as well as receive on the same channel at a rate where a POST per message is a poor fit: in-app chat between rider and driver, the driver app needing push commands from the server with acknowledgements, a live negotiation of the fare, or binary payloads. None of these is in the requirements.
+@P Polling is the fallback, and it is what the apps can do today. Its cost, computed for N riders watching, each polling every 5 seconds (rate = N / 5 requests per second per endpoint). Re-measured after migration 016 (the index on payment(trip_id)), CONFIRMED in evidence/migration_016_polling_remeasure.txt; the "before" column keeps the measurement of Part B and of the Stage 4 close baseline (evidence/migration_016_measure_before.txt).
+@TBL 8
+Watching riders N | EP03 requests per second | EP03 body bytes per second (971 B each) | Database time per second, EP03 before the index (about 15 ms per read) | Database time per second, EP03 after (0.23 ms; range at 0.14 to 0.32 ms) | EP05 requests per second | Database time per second, EP05 (0.04 ms)
+100 | 20 | 19.4 KB | 0.30 s (0.3 core) | 0.0046 s (0.003 to 0.006) | 20 | 0.0008 s
+1,000 | 200 | 194 KB | 3.0 s (about 3 cores) | 0.046 s (0.028 to 0.064) | 200 | 0.008 s
+10,000 | 2,000 | 1.9 MB | 30 s (about 30 cores) | 0.46 s (0.28 to 0.64) | 2,000 | 0.08 s
+100,000 | 20,000 | 19.4 MB | 300 s (about 300 cores) | 4.6 s (2.8 to 6.4) | 20,000 | 0.8 s
+@END
+@P Assumptions, visible:
+@B Poll interval 5 seconds, one EP03 read and one EP05 read per poll.
+@B Read times are warm-cache execution times of the SQL statement (EXPLAIN ANALYZE), not whole-request times: network, JSON building, connection pool, authentication and the application's own CPU are not included. EP03 read 0.23 ms (median of 5 runs, range 0.14 to 0.32 ms) after the index, against about 15 ms before (the payments scan inside it: 14.8 to 17.7 ms; the whole EP03 read: 13.8 to 14.3 ms; evidence/migration_016_measure_before.txt). EP05 read 0.04 ms (median of 4 warm runs; Part B measured 0.09 ms on another run). The first read of a trip that is not in cache cost 7 to 9 ms (EP03) and 3.8 ms (EP05); a rider who keeps polling keeps those pages warm, so the warm figure is used.
+@B Timings on this machine vary by about 3 times between runs, so every figure below is an order of magnitude, and the range column shows what the spread alone does.
+@B "Cores" = seconds of database execution per second of wall clock, assuming the work spreads perfectly over cores. Real systems lose some to locks and contention.
+## The feed and the LISTEN and NOTIFY tests
+@P The API reads PostgreSQL; PostgreSQL does not push to the API unless the API asks. Proposal (one mechanism, in two steps):
+@B Step 1 (no change to the database): a batched poller inside each API instance. Each instance keeps the list of trips it has open streams for. Every 1 second it runs two queries for all of them at once: new status events from trip_status_history in seq order, and the latest ping per trip by a lateral join that takes the newest row of each trip. The cost grows with the number of open streams per instance, not with the number of polls: 10,000 streams over 10 instances is 1,000 streams per instance, one batch per second (INFERRED, scaling the 50 stream timing; not measured). Status events reach the rider within about 1 second.
+@B Step 2 (needs a migration in a later stage; NOT added now, decision 3): a doorbell. A NOTIFY sent when trip_status_history gets a row would wake the poller at once instead of waiting for its timer. The data path stays the same (read by seq), so the notification only needs to say "something changed for this trip".
+@P What LISTEN and NOTIFY do and do not do (CONFIRMED, evidence/part_b_listen_notify.txt and part_b_listen_notify_cross_session.txt, run as ridehail_app with pg_notify by hand; no trigger, no table):
+@TBL 9
+Test | Result | Meaning for the design
+N2 notification sent in a transaction that is rolled back | not delivered | a rolled-back status move never rings the bell; the notification is tied to the commit
+N3c notification sent inside an open transaction | delivered only after the COMMIT | the reader never sees an event before the data it points to is visible
+N4 notification sent while nobody listens, then a session starts listening | not delivered | notifications are lost while a listener is disconnected; they are not stored
+N5 payload of 7,999 characters, then 8,000 | the first is accepted; the second fails with SQLSTATE 22023 "payload string too long" | the payload limit is under 8,000 bytes: send ids only (trip_id, seq), never the event body
+@END
+@P Why seq makes resume safe. Notifications can be lost (N4), but they are never the data. Whenever the API wakes (by a notification or by its 1 second timer) it reads from the table WHERE trip_id = ... AND seq > last_sent. A lost notification costs at most one timer interval of delay, never an event. The same read serves a client that reconnects with Last-Event-ID.
+## The event format, resume and ending
+@P The endpoint is EP27 GET /v1/trips/{trip_id}/events, specified in 06_api_contracts.md. Response: 200, Content-Type: text/event-stream, Cache-Control: no-store, X-Accel-Buffering: no.
+@P A first connection (real seq values and statuses of trip 40000000-0000-0000-0000-000000198904; the timestamps are identical because the bulk loader wrote the whole trip in one transaction; the location line is illustrative):
+@CODE
+GET /v1/trips/40000000-0000-0000-0000-000000198904/events
+Authorization: Bearer ****
+Accept: text/event-stream
+
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Cache-Control: no-store
+
+retry: 3000
+
+id: 930297
+event: status
+data: {"seq":930297,"from_status":null,"to_status":"requested","created_at":"2026-10-06T18:43:32.458283Z"}
+
+id: 930298
+event: status
+data: {"seq":930298,"from_status":"requested","to_status":"assigned","created_at":"2026-10-06T18:43:32.458283Z"}
+
+event: location
+data: {"latitude":6.455210,"longitude":3.388742,"accuracy_m":8,"recorded_at":"2026-10-06T18:44:09.310552Z"}
+
+: keepalive
+@END
+@P Resume with seq. The client had seen 930299 (arrived) and lost the connection. It reconnects with that id and receives only what it missed, then the end:
+@CODE
+GET /v1/trips/40000000-0000-0000-0000-000000198904/events
+Last-Event-ID: 930299
+
+HTTP/1.1 200 OK
+...
+id: 930300
+event: status
+data: {"seq":930300,"from_status":"arrived","to_status":"started","created_at":"2026-10-06T18:43:32.458283Z"}
+
+id: 930301
+event: status
+data: {"seq":930301,"from_status":"started","to_status":"completed","created_at":"2026-10-06T18:43:32.458283Z"}
+
+event: end
+data: {"reason":"completed"}
+@END
+@P The test outputs are evidence/part_b_listen_notify.txt, evidence/part_b_listen_notify_cross_session.txt, evidence/part_b_realtime_plans.txt, evidence/part_b_trip_row_lock_b.txt, evidence/migration_016_polling_remeasure.txt.

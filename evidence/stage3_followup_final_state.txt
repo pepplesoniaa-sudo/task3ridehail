@@ -1,0 +1,40 @@
+##### DOC DIFF STATISTICS (before_fix6 backup -> now)
+02_entities: lines 291 -> 311, bytes 20452 -> 24656
+03_state_machine: lines 292 -> 317, bytes 31373 -> 37656
+04_hard_questions: lines 600 -> 635, bytes 55785 -> 65499
+05_traceability: lines 59 -> 66, bytes 9719 -> 12114
+01_requirements.md and 02b_relationships.md: not edited (backups exist, identical): 01-identical 02b-identical
+
+##### A3.3 timeline on a bulk trip (40000000-...-000100), ordered by seq, as ridehail_app
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ seq | from_status | to_status | actor_role |          created_at           
+-----+-------------+-----------+------------+-------------------------------
+ 504 |             | requested | rider      | 2026-10-06 18:11:00.519301+00
+ 505 | requested   | assigned  | driver     | 2026-10-06 18:11:00.519301+00
+ 506 | assigned    | arrived   | driver     | 2026-10-06 18:11:00.519301+00
+ 507 | arrived     | started   | driver     | 2026-10-06 18:11:00.519301+00
+ 508 | started     | completed | driver     | 2026-10-06 18:11:00.519301+00
+(5 rows)
+
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Index Only Scan using trip_status_history_trip_seq_idx on trip_status_history
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000000100'::uuid)
+(2 rows)
+
+
+##### FINAL STATE
+tables 16
+indexes 42
+functions 18
+triggers 27
+triggers not enabled 0
+roles ridehail(login=true,super=true), ridehail_app(login=false,super=false), ridehail_erasure_owner(login=false,super=false), ridehail_writer(login=false,super=false)
+app privileges on history/audit: audit_log=SELECT; trip_status_history=SELECT
+leftover proof roles/trips: 0 / 0
+001_roles_and_functions.sql 002_reference_tables.sql 003_people.sql 004_quotes_trips.sql 005_money.sql 006_rating_idempotency_ping_erasure.sql 007_indexes.sql 008_grants.sql 009_fix_erasure_select_grants.sql 010_history_audit_written_by_database.sql 011_fix_add_support_note.sql 

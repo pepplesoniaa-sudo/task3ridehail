@@ -1,0 +1,25 @@
+######## CATALOGUE CHECK AND THREE PASSES, Stage 5 prep 2, final run (2026-10-07T20:17Z); documents 06, 06b, 06c, 09, 10, 11 changed, database and migrations untouched
+######## CATALOGUE CHECK
+TBL  : documents   16 | database   16 | in documents not in database: none | in database not in documents: none
+CON  : documents  116 | database  116 | in documents not in database: none | in database not in documents: none
+IDX  : documents   42 | database   42 | in documents not in database: none | in database not in documents: none
+TRG  : documents   27 | database   27 | in documents not in database: none | in database not in documents: none
+FN   : database 18 | named in documents: 18 | not named: none
+ROLE : database 4 (ridehail,ridehail_app,ridehail_erasure_owner,ridehail_writer)
+TOTAL MISMATCHES: 0
+
+######## PASS 1 fields (docs\02 against database columns)
+tables 16 | columns in database 165 | field rows in docs\02 165 | columns in db not in 02: none | in 02 not in db: none
+
+######## PASS 2 constraints and indexes (docs\04 question 6 and 7)
+FK rows 22 without a justification text: 0 | CHECK rows 66 not "none needed": 0 | PK/UNIQUE rows 32
+index count from documents: constraint-backed 32 + chosen 10 = 42 | database indexes 42
+
+######## PASS 3 requirement IDs (docs\01 against the other documents)
+defined 26 | cited but undefined: none | defined but not in docs\05: none
+
+######## DATABASE STATE (read only)
+setting|14 tables|16 indexes|42 payment|169410 audit_log|169026 trip|200012 trip_status_history|932072 
+migration files: 16
+task3-pg|Up 6 hours
+bgjobs-pg|Exited (255) 6 hours ago

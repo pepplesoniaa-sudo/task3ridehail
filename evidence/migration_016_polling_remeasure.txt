@@ -1,0 +1,224 @@
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+=== E1 EP03 full read, trip 40000000-...-198904 (rider 777), 5 runs
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.181..0.182 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.052..0.053 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Filter: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.016..0.016 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.107..0.108 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.061..0.062 rows=1 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 3.631 ms
+ Execution Time: 0.323 ms
+(12 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.095..0.097 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.024..0.025 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Filter: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.014..0.014 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.049..0.050 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.021..0.022 rows=1 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.578 ms
+ Execution Time: 0.233 ms
+(12 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.082..0.084 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.019..0.020 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Filter: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.009..0.009 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.046..0.046 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.011..0.013 rows=1 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.553 ms
+ Execution Time: 0.258 ms
+(12 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.073..0.075 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.017..0.018 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Filter: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.010..0.010 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.038..0.038 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.010..0.011 rows=1 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.579 ms
+ Execution Time: 0.139 ms
+(12 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.102..0.103 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.013..0.014 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Filter: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.008..0.008 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.073..0.073 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.043..0.044 rows=1 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.535 ms
+ Execution Time: 0.164 ms
+(12 rows)
+
+=== E2 EP03 full read, two other trips (any rider), 3 runs each
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=6.948..6.952 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.035..0.036 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000111893'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=5.467..5.467 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=1.429..1.429 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=1.424..1.424 rows=0 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.543 ms
+ Execution Time: 7.115 ms
+(11 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.075..0.076 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.043..0.044 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000111893'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.009..0.009 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.011..0.012 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.009..0.009 rows=0 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.472 ms
+ Execution Time: 0.137 ms
+(11 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.046..0.049 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.015..0.016 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000111893'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.010..0.010 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.012..0.012 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.008..0.009 rows=0 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.448 ms
+ Execution Time: 0.105 ms
+(11 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=8.976..8.981 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=4.162..4.164 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000049191'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=4.470..4.470 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.325..0.326 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.320..0.321 rows=0 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.554 ms
+ Execution Time: 9.210 ms
+(11 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.034..0.036 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.011..0.011 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000049191'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.007..0.007 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.010..0.010 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.007..0.007 rows=0 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.599 ms
+ Execution Time: 0.087 ms
+(11 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.023..0.024 rows=1 loops=1)
+   ->  Index Scan using trip_pkey on trip t (actual time=0.007..0.007 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000049191'::uuid)
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.004..0.005 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+   SubPlan 1
+     ->  Aggregate (actual time=0.007..0.007 rows=1 loops=1)
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.005..0.005 rows=0 loops=1)
+                 Index Cond: (trip_id = t.id)
+ Planning Time: 0.281 ms
+ Execution Time: 0.056 ms
+(11 rows)
+
+=== E3 EP05 latest ping, trip 40000000-...-060152, 5 runs
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=3.788..3.790 rows=1 loops=1)
+   ->  Index Scan using location_ping_trip_recorded_idx on location_ping (actual time=3.787..3.787 rows=1 loops=1)
+         Index Cond: (trip_id = '40000000-0000-0000-0000-000000060152'::uuid)
+ Planning Time: 7.803 ms
+ Execution Time: 3.812 ms
+(5 rows)
+
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.019..0.020 rows=1 loops=1)
+   ->  Index Scan using location_ping_trip_recorded_idx on location_ping (actual time=0.018..0.018 rows=1 loops=1)
+         Index Cond: (trip_id = '40000000-0000-0000-0000-000000060152'::uuid)
+ Planning Time: 0.097 ms
+ Execution Time: 0.038 ms
+(5 rows)
+
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.018..0.019 rows=1 loops=1)
+   ->  Index Scan using location_ping_trip_recorded_idx on location_ping (actual time=0.017..0.018 rows=1 loops=1)
+         Index Cond: (trip_id = '40000000-0000-0000-0000-000000060152'::uuid)
+ Planning Time: 0.086 ms
+ Execution Time: 0.038 ms
+(5 rows)
+
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.018..0.019 rows=1 loops=1)
+   ->  Index Scan using location_ping_trip_recorded_idx on location_ping (actual time=0.018..0.018 rows=1 loops=1)
+         Index Cond: (trip_id = '40000000-0000-0000-0000-000000060152'::uuid)
+ Planning Time: 0.130 ms
+ Execution Time: 0.040 ms
+(5 rows)
+
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.019..0.020 rows=1 loops=1)
+   ->  Index Scan using location_ping_trip_recorded_idx on location_ping (actual time=0.018..0.018 rows=1 loops=1)
+         Index Cond: (trip_id = '40000000-0000-0000-0000-000000060152'::uuid)
+ Planning Time: 0.095 ms
+ Execution Time: 0.036 ms
+(5 rows)
+

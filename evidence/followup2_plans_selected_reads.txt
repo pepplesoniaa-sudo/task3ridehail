@@ -1,0 +1,58 @@
+=== P03 A2.1 open requests near the driver
+                                                                             QUERY PLAN                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5169.00..5169.03 rows=12 width=64) (actual time=2.754..2.760 rows=20 loops=1)
+   Buffers: shared hit=1722
+   ->  Sort  (cost=5169.00..5169.03 rows=12 width=64) (actual time=2.753..2.756 rows=20 loops=1)
+         Sort Key: t.created_at
+         Sort Method: quicksort  Memory: 27kB
+         Buffers: shared hit=1722
+         ->  Nested Loop  (cost=2151.06..5168.78 rows=12 width=64) (actual time=1.733..2.223 rows=22 loops=1)
+               Buffers: shared hit=1719
+               ->  Bitmap Heap Scan on trip t  (cost=2150.64..2154.65 rows=407 width=58) (actual time=0.639..0.952 rows=401 loops=1)
+                     Recheck Cond: ((status = ANY ('{requested,assigned,arrived,started}'::text[])) AND (status = 'requested'::text))
+                     Heap Blocks: exact=54
+                     Buffers: shared hit=115
+                     ->  BitmapAnd  (cost=2150.64..2150.64 rows=1 width=0) (actual time=0.602..0.603 rows=0 loops=1)
+                           Buffers: shared hit=61
+                           ->  Bitmap Index Scan on trip_one_active_per_driver  (cost=0.00..811.88 rows=720 width=0) (actual time=0.420..0.421 rows=726 loops=1)
+                                 Buffers: shared hit=57
+                           ->  Bitmap Index Scan on trip_requested_created_at_idx  (cost=0.00..1338.31 rows=407 width=0) (actual time=0.170..0.170 rows=420 loops=1)
+                                 Buffers: shared hit=4
+               ->  Index Scan using fare_quote_pkey on fare_quote q  (cost=0.42..7.41 rows=1 width=38) (actual time=0.003..0.003 rows=0 loops=401)
+                     Index Cond: (id = t.fare_quote_id)
+                     Filter: ((pickup_latitude >= 6.475) AND (pickup_latitude <= 6.495) AND (pickup_longitude >= 3.385) AND (pickup_longitude <= 3.405))
+                     Rows Removed by Filter: 1
+                     Buffers: shared hit=1604
+ Planning:
+   Buffers: shared hit=217
+ Planning Time: 2.584 ms
+ Execution Time: 3.457 ms
+(27 rows)
+
+=== P14 reconciliation job: pending payments older than 900 seconds
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..231.62 rows=100 width=39) (actual time=0.018..0.598 rows=100 loops=1)
+   Buffers: shared hit=115
+   ->  Index Scan using payment_pending_created_at_idx on payment  (cost=0.28..992.72 rows=429 width=39) (actual time=0.017..0.582 rows=100 loops=1)
+         Index Cond: (created_at < (now() - '00:15:00'::interval))
+         Buffers: shared hit=115
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.246 ms
+ Execution Time: 0.628 ms
+(9 rows)
+
+=== P01 A1.1 retry check
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idem_one_key_per_rider_action on idempotency_key  (cost=0.41..8.44 rows=1 width=58) (actual time=0.042..0.043 rows=1 loops=1)
+   Index Cond: ((rider_id = '10000000-0000-0000-0000-000000004001'::uuid) AND (action = 'request_trip'::text) AND (key = 'bulk-1000'::text))
+   Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=104
+ Planning Time: 1.539 ms
+ Execution Time: 0.262 ms
+(7 rows)
+

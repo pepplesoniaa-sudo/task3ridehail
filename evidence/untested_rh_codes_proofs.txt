@@ -1,0 +1,469 @@
+=== U-RH002 a new trip must start as requested: rider 3000 inserts a trip with status assigned
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT 0 1
+ERROR:  a new trip must start as requested (A1), not assigned
+SQLSTATE RH002
+ROLLBACK
+=== U-RH003 a new trip cannot carry start, end or cancel times: started_at set on insert
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT 0 1
+ERROR:  a new trip cannot carry start, end or cancel times
+SQLSTATE RH003
+ROLLBACK
+=== U-RH007a actor role not set (trip): a move with no claim at all
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  app.actor_role is not set
+SQLSTATE RH007
+ROLLBACK
+=== U-RH007b actor role not set (payment): fail a pending payment with no claim
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  app.actor_role is not set
+SQLSTATE RH007
+ROLLBACK
+=== U-RH009 actor is not this trip rider: rider 1 cancels the assigned trip 10 of rider 4
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  actor is not this trip's rider (F9)
+SQLSTATE RH009
+ROLLBACK
+=== U-RH011a support actor id required (trip): support claim with an empty id cancels trip 10
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ support    | 
+(1 row)
+
+ERROR:  a support actor id is required
+SQLSTATE RH011
+ROLLBACK
+=== U-RH011b support actor id required (payment): support claim with an empty id fails pending payment PRV-T03-A
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ support    | 
+(1 row)
+
+ERROR:  a support actor id is required
+SQLSTATE RH011
+ROLLBACK
+=== U-RH013 cancellation fee setting missing. SETUP by the dev login: delete the row (the app role has no DELETE on setting). Then rider 4 cancels assigned trip 10 as ridehail_app
+BEGIN
+ setup_user 
+------------
+ ridehail
+(1 row)
+
+DELETE 1
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  setting cancellation_fee_minor is missing
+SQLSTATE RH013
+ROLLBACK
+=== U-RH013b the app role cannot create that state: DELETE on setting as ridehail_app
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  permission denied for table setting
+SQLSTATE 42501
+ROLLBACK
+=== U-RH014a unexpected target status: which target statuses do the trip rule rows allow? (expect only arrived assigned cancelled completed started)
+              trip_rule_targets               
+----------------------------------------------
+ arrived assigned cancelled completed started
+(1 row)
+
+=== U-RH014b the app role cannot add a rule row (INSERT on status_transition_rule as ridehail_app)
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  permission denied for table status_transition_rule
+SQLSTATE 42501
+ROLLBACK
+=== U-RH014c SETUP by the dev login: add a rule row assigned -> requested for riders. Then rider 4 makes that move as ridehail_app
+BEGIN
+ setup_user 
+------------
+ ridehail
+(1 row)
+
+INSERT 0 1
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  unexpected target status requested
+SQLSTATE RH014
+ROLLBACK
+=== U-RH016a trips are never deleted: DELETE FROM trip as ridehail_app
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  permission denied for table trip
+SQLSTATE 42501
+ROLLBACK
+=== U-RH016b the same DELETE by the dev login (superuser): the trigger still fires
+BEGIN
+    cu    
+----------
+ ridehail
+(1 row)
+
+ERROR:  trips are never deleted (B4, B5)
+SQLSTATE RH016
+ROLLBACK
+=== U-RH020 a payment must be created as pending: insert with status succeeded
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  a payment must be created as pending, not succeeded
+SQLSTATE RH020
+ROLLBACK
+=== U-RH021 only the trip rider may start a payment: rider 5 pays the fare of trip 02 (rider 2)
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000005
+(1 row)
+
+ERROR:  only the trip's rider may start a payment (actor rider / aaaaaaaa-0000-0000-0000-000000000005)
+SQLSTATE RH021
+ROLLBACK
+=== U-RH025 payment amount differs from the cancellation fee: trip 04 (cancelled, fee 50000), amount 1
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  payment amount 1 does not equal the cancellation fee 50000
+SQLSTATE RH025
+ROLLBACK
+=== U-RH029 payment columns may not change in this move: provider fails PRV-T03-A and also changes amount_minor
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ERROR:  these payment columns may not change in this move: {status,amount_minor,failure_reason}
+SQLSTATE RH029
+ROLLBACK
+=== U-RH031a provider_event rows are never deleted: DELETE as ridehail_app
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  permission denied for table provider_event
+SQLSTATE 42501
+ROLLBACK
+=== U-RH031b the same DELETE by the dev login (superuser)
+BEGIN
+    cu    
+----------
+ ridehail
+(1 row)
+
+ERROR:  provider_event rows are never deleted
+SQLSTATE RH031
+ROLLBACK
+=== U-RH033 the received fields of a provider_event cannot change: an unprocessed event gets a new amount
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+INSERT 0 1
+ERROR:  the received fields of a provider_event cannot change
+SQLSTATE RH033
+ROLLBACK
+=== U-RH040a rating is append-only: UPDATE and DELETE as ridehail_app
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  permission denied for table rating
+SQLSTATE 42501
+ROLLBACK
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  permission denied for table rating
+SQLSTATE 42501
+ROLLBACK
+=== U-RH040b the same UPDATE by the dev login (superuser, not the erasure owner)
+BEGIN
+    cu    
+----------
+ ridehail
+(1 row)
+
+ERROR:  rating is append-only: UPDATE is not allowed (current_user is ridehail)
+SQLSTATE RH040
+ROLLBACK
+=== U-RH042 rating window setting missing. SETUP by the dev login: delete rating_window_days. Then rider 3 rates completed trip 03 as ridehail_app
+BEGIN
+ setup_user 
+------------
+ ridehail
+(1 row)
+
+DELETE 1
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  setting rating_window_days is missing
+SQLSTATE RH042
+ROLLBACK
+=== U-RH044 the rating must come from this trip rider: support widens the window to 36500 days (as E24 did), then rider 5 rates trip 03 as rater_role rider
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+UPDATE 1
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000005
+(1 row)
+
+ERROR:  the rating must come from this trip's rider (actor rider / aaaaaaaa-0000-0000-0000-000000000005)
+SQLSTATE RH044
+ROLLBACK
+=== U-RH045 the rating must come from this trip driver: same, driver 4 rates trip 03 (driver 1) as rater_role driver
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+UPDATE 1
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  the rating must come from this trip's driver (actor driver / bbbbbbbb-0000-0000-0000-000000000004)
+SQLSTATE RH045
+ROLLBACK
+=== U-RH051 refund currency differs from payment currency: refund in USD against succeeded payment PRV-T01-A
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  refund currency USD differs from payment currency NGN
+SQLSTATE RH051
+ROLLBACK
+=== U-RH080a append-only table: UPDATE of fare_quote, refund, audit_log, trip_status_history, location_ping as ridehail_app (privilege stops each)
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ERROR:  permission denied for table fare_quote
+SQLSTATE 42501
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table refund
+SQLSTATE 42501
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table audit_log
+SQLSTATE 42501
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table trip_status_history
+SQLSTATE 42501
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table location_ping
+SQLSTATE 42501
+ROLLBACK
+=== U-RH080b the same UPDATEs by the dev login (superuser): the trigger fires
+BEGIN
+    cu    
+----------
+ ridehail
+(1 row)
+
+ERROR:  fare_quote is append-only: UPDATE is not allowed
+SQLSTATE RH080
+ROLLBACK
+BEGIN
+ERROR:  refund is append-only: UPDATE is not allowed
+SQLSTATE RH080
+ROLLBACK
+BEGIN
+ERROR:  audit_log is append-only: UPDATE is not allowed
+SQLSTATE RH080
+ROLLBACK
+BEGIN
+ERROR:  trip_status_history is append-only: UPDATE is not allowed
+SQLSTATE RH080
+ROLLBACK
+BEGIN
+ERROR:  location_ping is append-only: UPDATE is not allowed
+SQLSTATE RH080
+ROLLBACK

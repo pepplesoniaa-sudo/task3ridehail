@@ -1,0 +1,99 @@
+################ E1: ridehail_app creates a TEMP table named audit_log and lets the writer insert into it (payment status change)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  permission denied to create temporary tables in database "ridehail_design"
+LINE 1: CREATE TEMP TABLE audit_log (LIKE public.audit_log INCLUDING...
+                          ^
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+################ E2: a TEMP table named trip_status_history (trip move by driver 3 on trip 10)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  permission denied to create temporary tables in database "ridehail_design"
+LINE 1: CREATE TEMP TABLE trip_status_history (LIKE public.trip_stat...
+                          ^
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+################ E3: an attacker role that owns a schema earlier on the search path (attack_s) with its own audit_log and trip_status_history
+  attacker_is   | session_user 
+----------------+--------------
+ attacker_proof | ridehail
+(1 row)
+
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+   search_path    
+------------------
+ attack_s, public
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ eeeeeeee-0000-0000-0000-000000000010 | arrived
+(1 row)
+
+UPDATE 1
+ rows_in_public_audit_log_for_payment | rows_in_attacker_audit_log | rows_in_public_history_for_trip_10 | rows_in_attacker_history 
+--------------------------------------+----------------------------+------------------------------------+--------------------------
+                                    1 |                          0 |                                  3 |                        0
+(1 row)
+
+################ E4: the NON-definer triggers: a TEMP table named status_transition_rule allows a skipped move (assigned > started by driver 3)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  permission denied to create temporary tables in database "ridehail_design"
+LINE 1: CREATE TEMP TABLE status_transition_rule (entity text, from_...
+                          ^
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+--- control: the same skipped move WITHOUT the temp table is refused
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  illegal transition assigned -> started by driver
+CONTEXT:  PL/pgSQL function trip_enforce_transition() line 54 at RAISE

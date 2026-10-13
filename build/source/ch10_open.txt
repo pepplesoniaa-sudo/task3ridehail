@@ -1,0 +1,58 @@
+# Chapter 10. Open items and decisions
+@SRC Built from docs/09_open_items.md and docs/10_brief_checklist.md.
+## Decisions recorded
+@P Recorded on 7 October 2026. This section records what the owner decided. Where section 2 above still reads earlier than this record, this record is the later word. Twelve decisions are approved and five are still open.
+### Approved
+@B D10, erasure of text columns. Approved: the five text columns (pickup_address, dropoff_address, driver_name_snapshot and vehicle_plate_snapshot on trip, and comment on rating) may be blanked only by erase_rider and erase_driver, running under ridehail_erasure_owner.
+@B D1, fare model. Approved as written.
+@B D2, cancellation fee. Approved as written.
+@B D3, request timeout and payment reconcile after. Approved as written.
+@B D4, settings values. Approved as written.
+@B D6, rate limits. Approved as written.
+@B D7, support visibility. Approved as written.
+@B D11, the 62 bulk trips with a misplaced seq. Approved as written.
+@B D12, manual refunds of failed payments leave no money record. Approved as written.
+@B D14, real time with SSE. Approved as written.
+@B D15, REST fields and expand parameters, and staying on REST. Approved as written.
+@B D17, the driver name in the rider's TripSummary. Approved as written.
+### Still open
+@B D5, webhook provider. Design assumption written in docs\06 section 1.11 and in EP15, EP19 and EP21; owner may replace.
+@B D8, Q5 location retention.
+@B D9, Q6 a driver who never arrives.
+@B D13, authentication design. Design assumption written in docs\06 section 1.10 (baseline: short lived tokens with a person status check on every request; a denylist is an optional hardening); owner may replace.
+@B D16, distance estimator. Design assumption written in docs\06 EP01 (the price rule and the distance estimator interface); owner may replace.
+## Placeholders
+@P Every placeholder is a value I chose so that something can run; it needs the owner.
+@TBL 8
+# | Placeholder | Current value | Where it lives | Why it is a placeholder
+P1 | City | Lagos (assumed) | db/seed/seed_sample_settings.sql, applied; used by the service-area box | no city was ever given
+P2 | Base fare | 50000 kobo (500 naira) | setting base_fare_minor | no fare model was given
+P3 | Price per kilometre | 15000 kobo (150 naira) | setting per_km_minor | same
+P4 | Price per minute | 3000 kobo (30 naira) | setting per_minute_minor | same
+P5 | Quote validity | 300 seconds | setting quote_validity_seconds | same
+P6 | Service-area box | 6.38 to 6.70 north, 3.10 to 3.70 east (stored as degrees x 1,000,000: 6380000, 6700000, 3100000, 3700000) | settings service_area_min_lat_e6, service_area_max_lat_e6, service_area_min_lon_e6, service_area_max_lon_e6 | a rough rectangle; it also contains sea and land the service will not cover
+P7 | Timeout job interval | 60 seconds | setting request_timeout_check_interval_seconds | not chosen by the owner
+P8 | Payment reconciliation job interval | 300 seconds | setting payment_reconcile_check_interval_seconds | not chosen by the owner
+P9 | Request timeout | 600 seconds | setting request_timeout_seconds (B9, T9) | marked "placeholder, needs owner approval" in 01, 03, 05
+P10 | Payment reconcile-after | 900 seconds | setting payment_reconcile_after_seconds | marked "placeholder, needs owner approval" in 03, 05
+P11 | Cancellation fee | 50000 kobo (500 naira), flat, after assignment | setting cancellation_fee_minor (B9) | the owner approved it as a placeholder held in a setting, not hard coded
+P12 | Test support admin | dddddddd-0000-0000-0000-000000000001 | named in the settings seed; the 10 audit rows of the seed credit it | a seed-A test row; a real support admin must replace it before real use
+P13 | Distance and duration estimator | straight-line distance x 1.3, speed 8.33 m/s | 06 EP01 | the routing method is not designed
+P14 | Rate limits | quotes 10/min, pings 1/s per trip, other writes 30/min, reads 120/min | 06 section 1.8 | chosen without traffic figures
+P15 | Webhook scheme | HMAC-SHA256 of timestamp + body, 5 minute window, fields provider_event_id, provider_reference, event_type, amount_minor, currency, occurred_at, failure_reason | 06 EP19 | the provider is unnamed
+P16 | Idempotency timings | key lasts 24 hours; a stuck payment key is taken over after 120 seconds; lock wait 800 ms | 06 section 1.7, EP15 | chosen, not measured against real traffic
+P17 | API limits | addresses 1 to 300 characters, reasons 1 to 500, notes 1 to 2000, comment up to 500, body up to 16 KiB, list page 20 (maximum 100), open requests maximum 50 | 06 | chosen
+P18 | Event stream settings | heartbeat 20 s, location one event per 2 s, 15 minute maximum life, close at token expiry, 2 open streams per rider per trip, poller every 1 s | 06 EP27, 08 | designs; nothing was served over HTTP
+P19 | Cursor secret | not created | 06 section 1.9 | the signing secret belongs in the environment, never in the project
+@END
+## Known limits
+@P What the design does not do, or has not proved.
+@B 62 bulk trips (299 history rows) have a history row numbered out of order (05 item 13, CONFIRMED in evidence/migration_010_seq_investigation.txt). Accepted by the owner. A repair would need the append-only trigger switched off, which nobody approved.
+@B pg_hba trusts loopback and the local socket inside the container. Any process in the container connects as any role with no password. Only other addresses use scram-sha-256 (CONFIRMED in the login-role test). Not changed (05 item 20).
+@B Only three table names were attacked in the search-path proofs (audit_log, trip_status_history, status_transition_rule). The other tables rely on the same two protections (migrations 013 and 014) but were not each attacked (05 item 21).
+@B Almost no concurrency tests exist beyond two: a second insert of the same idempotency key waits and times out (55P03), and a second move of the same trip waits for the first. Nothing was raced for two drivers accepting the same trip, two refunds on one payment, or a repeated provider event (05 item 10).
+@B No driver is installed, so the SQLSTATE field name is unconfirmed in any driver. 06 section 1.6 gives the names I expect for node-postgres, pgx, psycopg and JDBC from memory. Nothing was installed.
+@B Nothing was run over HTTP: no API exists (the api\ folder is empty), no endpoint, no stream, no GraphQL, no webhook. The contracts were checked only as the SQL behind them (06, 07, 08).
+@B The actor is claimed by the application. The database checks that the claimed actor may make a move; it cannot prove who the actor is. A login role that is a member of ridehail_app can claim support (CONFIRMED, 05 items 7 and 18). A superuser can still switch triggers off.
+@B Q5 and Q6 are open. Q5, location retention, has no period chosen and is blocked on legal advice (NDPA 2023 was not read). Q6, a driver who never arrives, still lets the rider pay the fee if they cancel after assignment. Both are open owner decisions (D8 and D9).
+@P The document itself shows only the four unfilled class note places, in chapters 7 and 8.

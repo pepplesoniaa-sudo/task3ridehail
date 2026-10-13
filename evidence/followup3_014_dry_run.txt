@@ -1,0 +1,152 @@
+##### DRY RUN 014 (BEGIN ... ROLLBACK): the migration, then the proofs as ridehail_app, then the E3 schema attack
+REVOKE
+ app_may_create_temp | owner_may_create_temp | writer_may_create_temp | app_may_still_connect 
+---------------------+-----------------------+------------------------+-----------------------
+ f                   | f                     | f                      | t
+(1 row)
+
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+--- T1 CREATE TEMP TABLE is refused (both spellings)
+ERROR:  permission denied to create temporary tables in database "ridehail_design"
+LINE 1: CREATE TEMP TABLE proof_temp (a int);
+                          ^
+ERROR:  permission denied to create temporary tables in database "ridehail_design"
+LINE 1: CREATE TABLE pg_temp.proof_temp2 (a int);
+                     ^
+--- T1b the three shadow tables of the earlier attacks are refused at the first step
+ERROR:  permission denied to create temporary tables in database "ridehail_design"
+LINE 1: CREATE TEMP TABLE audit_log (LIKE public.audit_log INCLUDING...
+                          ^
+ERROR:  permission denied to create temporary tables in database "ridehail_design"
+LINE 1: CREATE TEMP TABLE trip_status_history (LIKE public.trip_stat...
+                          ^
+ERROR:  permission denied to create temporary tables in database "ridehail_design"
+LINE 1: CREATE TEMP TABLE status_transition_rule (entity text, from_...
+                          ^
+--- T2 a normal trip move: driver 3 moves trip 10 assigned -> arrived, the trigger writes the history row
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ eeeeeeee-0000-0000-0000-000000000010 | arrived
+(1 row)
+
+UPDATE 1
+ has_seq | from_status | to_status | actor_role |           actor_driver_id            
+---------+-------------+-----------+------------+--------------------------------------
+ t       | assigned    | arrived   | driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+--- T3 a payment move: the provider succeeds PRV-T03-A, the trigger writes the audit row
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ actor_role |    action     | entity_type |                details                 
+------------+---------------+-------------+----------------------------------------
+ provider   | status_change | payment     | {"to": "succeeded", "from": "pending"}
+(1 row)
+
+--- T4 a setting change by support: the trigger writes the audit row
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+          key           | int_value 
+------------------------+-----------
+ cancellation_fee_minor |     57000
+(1 row)
+
+UPDATE 1
+ actor_role |     action     |                            details                            
+------------+----------------+---------------------------------------------------------------
+ support    | setting_change | {"to": 57000, "key": "cancellation_fee_minor", "from": 50000}
+(1 row)
+
+--- T5 a rating: rider 3 rates trip 3, the cache of driver 1 changes
+ rating_sum | rating_count 
+------------+--------------
+          5 |            1
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000003
+(1 row)
+
+               trip_id                | rater_role | stars 
+--------------------------------------+------------+-------
+ eeeeeeee-0000-0000-0000-000000000003 | rider      |     4
+(1 row)
+
+INSERT 0 1
+ rating_sum | rating_count 
+------------+--------------
+          9 |            2
+(1 row)
+
+--- T6 an erasure by function: erase_rider(rider 1)
+ erase_rider 
+-------------
+ 
+(1 row)
+
+   full_name   |                    phone                     | deleted 
+---------------+----------------------------------------------+---------
+ Deleted rider | deleted-aaaaaaaa-0000-0000-0000-000000000001 | t
+(1 row)
+
+ trip | pickup_address | dropoff_address | fare_amount_minor 
+------+----------------+-----------------+-------------------
+ 01   | erased         | erased          |            250000
+ 05   | erased         | erased          |                  
+(2 rows)
+
+--- T7 a sort that spills to disk still works without the TEMP privilege (temporary FILES, not temp tables)
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Sort (actual rows=200012 loops=1)
+         Sort Key: trip.created_at DESC, trip.id
+         Sort Method: external merge  Disk: 6712kB
+         ->  Seq Scan on trip (actual rows=200012 loops=1)
+(5 rows)
+
+--- E3 again inside the dry run: an attacker-owned schema on the session path
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+UPDATE 1
+ rows_in_public_audit_log | rows_in_attacker_audit_log 
+--------------------------+----------------------------
+                        1 |                          0
+(1 row)
+
+dry run seconds: 3.3
+##### after the dry run nothing changed:
+app may create temp tables: true
+attacker roles/schemas left: 0/0
+rider 1 name: Rider 1
+setting value: 50000

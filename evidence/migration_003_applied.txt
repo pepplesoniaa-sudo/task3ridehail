@@ -1,0 +1,67 @@
+##### DRY RUN 003_people.sql (BEGIN ... ROLLBACK)
+CREATE INDEX
+CREATE TRIGGER
+ROLLBACK
+##### APPLY 003_people.sql (psql -1 -v ON_ERROR_STOP=1)
+CREATE TABLE
+CREATE TRIGGER
+CREATE TABLE
+CREATE TRIGGER
+CREATE TABLE
+CREATE INDEX
+CREATE TRIGGER
+##### SHOW after 003_people.sql
+                 List of relations
+ Schema |          Name          | Type  |  Owner   
+--------+------------------------+-------+----------
+ public | driver                 | table | ridehail
+ public | rider                  | table | ridehail
+ public | setting                | table | ridehail
+ public | status_transition_rule | table | ridehail
+ public | support_admin          | table | ridehail
+ public | vehicle                | table | ridehail
+(6 rows)
+
+   tbl   |          conname          | contype 
+---------+---------------------------+---------
+ rider   | rider_name_not_blank      | c
+ rider   | rider_phone_format        | c
+ rider   | rider_phone_key           | u
+ rider   | rider_pkey                | p
+ rider   | rider_rating_cache_valid  | c
+ driver  | driver_licence_number_key | u
+ driver  | driver_name_not_blank     | c
+ driver  | driver_phone_format       | c
+ driver  | driver_phone_key          | u
+ driver  | driver_pkey               | p
+ driver  | driver_rating_cache_valid | c
+ vehicle | vehicle_driver_id_fkey    | f
+ vehicle | vehicle_id_driver_id_key  | u
+ vehicle | vehicle_pkey              | p
+ vehicle | vehicle_plate_not_blank   | c
+ vehicle | vehicle_seat_count_range  | c
+(16 rows)
+
+   tbl   |     tgname     
+---------+----------------
+ rider   | set_updated_at
+ driver  | set_updated_at
+ vehicle | set_updated_at
+(3 rows)
+
+           index_name            |   tbl   
+---------------------------------+---------
+ rider_pkey                      | rider
+ rider_phone_key                 | rider
+ driver_pkey                     | driver
+ driver_phone_key                | driver
+ driver_licence_number_key       | driver
+ vehicle_pkey                    | vehicle
+ vehicle_id_driver_id_key        | vehicle
+ vehicle_plate_number_active_key | vehicle
+(8 rows)
+
+##### ROW COUNTS after 003
+rider 0
+driver 0
+vehicle 0

@@ -1,0 +1,27 @@
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+=== T1 one item (seed trip 0001): TripSummary for the rider before and after the fix
+  version   | fields | bytes 
+------------+--------+-------
+ before fix |     11 |   358
+ after fix  |     12 |   392
+(2 rows)
+
+=== T2 a page of 20 rows of rider 777: TripSummary with the name against the 7 fields the list row shows
+ items | page_bytes_after_fix | used_bytes | pct_used | pct_ignored 
+-------+----------------------+------------+----------+-------------
+    20 |                 8095 |       4675 |     57.8 |        42.2
+(1 row)
+
+=== T3 the real driver name values of the first 3 rows (for the worked example of 06 EP06)
+                  id                  | driver_name_snapshot 
+--------------------------------------+----------------------
+ 40000000-0000-0000-0000-000000198904 | BULK Driver 217
+ 40000000-0000-0000-0000-000000193904 | BULK Driver 17
+ 40000000-0000-0000-0000-000000188904 | BULK Driver 617
+(3 rows)
+

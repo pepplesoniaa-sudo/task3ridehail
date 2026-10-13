@@ -1,0 +1,57 @@
+##### DRY RUN 002_reference_tables.sql (BEGIN ... ROLLBACK)
+CREATE TRIGGER
+CREATE TABLE
+INSERT 0 17
+ROLLBACK
+##### APPLY 002_reference_tables.sql (psql -1 -v ON_ERROR_STOP=1)
+CREATE TABLE
+CREATE TRIGGER
+CREATE TABLE
+CREATE TRIGGER
+CREATE TABLE
+INSERT 0 17
+##### SHOW after 002_reference_tables.sql
+                 List of relations
+ Schema |          Name          | Type  |  Owner   
+--------+------------------------+-------+----------
+ public | setting                | table | ridehail
+ public | status_transition_rule | table | ridehail
+ public | support_admin          | table | ridehail
+(3 rows)
+
+          tbl           |           conname            | contype 
+------------------------+------------------------------+---------
+ support_admin          | support_admin_email_format   | c
+ support_admin          | support_admin_email_key      | u
+ support_admin          | support_admin_name_not_blank | c
+ support_admin          | support_admin_pkey           | p
+ setting                | setting_currency_ngn         | c
+ setting                | setting_money_has_currency   | c
+ setting                | setting_pkey                 | p
+ setting                | setting_updated_by_fkey      | f
+ setting                | setting_value_not_negative   | c
+ status_transition_rule | rule_actor_role_valid        | c
+ status_transition_rule | rule_entity_valid            | c
+ status_transition_rule | rule_from_differs_to         | c
+ status_transition_rule | rule_pkey                    | p
+(13 rows)
+
+      tbl      |     tgname     
+---------------+----------------
+ support_admin | set_updated_at
+ setting       | set_updated_at
+(2 rows)
+
+       index_name        |          tbl           
+-------------------------+------------------------
+ support_admin_pkey      | support_admin
+ support_admin_email_key | support_admin
+ setting_pkey            | setting
+ rule_pkey               | status_transition_rule
+(4 rows)
+
+##### ROW COUNTS after 002
+support_admin 0
+setting 0
+status_transition_rule trip 14
+status_transition_rule payment 3

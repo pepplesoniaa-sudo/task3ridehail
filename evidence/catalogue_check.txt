@@ -1,0 +1,6 @@
+TBL: expected 16 actual 16 | missing in database: none | extra in database: none
+CON: expected 117 actual 116 | missing in database: vehicle|vehicle_plate_number_active_key | extra in database: none
+IDX: expected 12 actual 13 | missing in database: none | extra in database: vehicle|vehicle_plate_number_active_key
+TRG: expected 27 actual 27 | missing in database: none | extra in database: none
+FN: expected 17 actual 17 | missing in database: none | extra in database: none
+TOTAL MISMATCHES: 2

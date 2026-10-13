@@ -1,0 +1,74 @@
+STAGE 5 EXPORT ROUND 2, STEP 1c: composite foreign key with empty columns, tested as ridehail_app in a rolled back transaction
+Run with: docker exec task3-pg psql -a -U ridehail -d ridehail_design, input = the statements below (psql -a echoes them)
+
+\set VERBOSITY default
+\set SHOW_CONTEXT never
+BEGIN;
+BEGIN
+SET ROLE ridehail_app;
+SET
+SELECT current_user AS cu, session_user AS su;
+      cu      |    su    
+--------------+----------
+ ridehail_app | ridehail
+(1 row)
+
+SELECT set_config('app.actor_role','rider',true), set_config('app.actor_id','10000000-0000-0000-0000-000000003000',true);
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT INTO fare_quote (id, rider_id, pickup_latitude, pickup_longitude, dropoff_latitude, dropoff_longitude, estimated_distance_m, estimated_duration_s, amount_minor, currency, expires_at)
+VALUES ('ffffffff-0000-0000-0000-0000000000f4','10000000-0000-0000-0000-000000003000',6.45,3.39,6.50,3.35,5000,900,120000,'NGN',now()+interval '1 hour');
+INSERT 0 1
+\echo '=== (i) a requested trip with driver_id and vehicle_id both empty: expect accepted'
+=== (i) a requested trip with driver_id and vehicle_id both empty: expect accepted
+INSERT INTO trip (id, rider_id, fare_quote_id, pickup_address, dropoff_address)
+VALUES ('90000000-0000-0000-0000-0000000000f4','10000000-0000-0000-0000-000000003000','ffffffff-0000-0000-0000-0000000000f4','p','d')
+RETURNING id, status, driver_id, vehicle_id, driver_name_snapshot, vehicle_plate_snapshot;
+                  id                  |  status   | driver_id | vehicle_id | driver_name_snapshot | vehicle_plate_snapshot 
+--------------------------------------+-----------+-----------+------------+----------------------+------------------------
+ 90000000-0000-0000-0000-0000000000f4 | requested |           |            |                      | 
+(1 row)
+
+INSERT 0 1
+SAVEPOINT s1;
+SAVEPOINT
+SELECT set_config('app.actor_role','rider',true), set_config('app.actor_id','10000000-0000-0000-0000-000000003001',true);
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003001
+(1 row)
+
+INSERT INTO fare_quote (id, rider_id, pickup_latitude, pickup_longitude, dropoff_latitude, dropoff_longitude, estimated_distance_m, estimated_duration_s, amount_minor, currency, expires_at)
+VALUES ('ffffffff-0000-0000-0000-0000000000f5','10000000-0000-0000-0000-000000003001',6.45,3.39,6.50,3.35,5000,900,120000,'NGN',now()+interval '1 hour');
+INSERT 0 1
+\echo '=== (ii) a trip row with driver_id SET (driver 1) and vehicle_id EMPTY: expect refused'
+=== (ii) a trip row with driver_id SET (driver 1) and vehicle_id EMPTY: expect refused
+INSERT INTO trip (id, rider_id, fare_quote_id, pickup_address, dropoff_address, driver_id)
+VALUES ('90000000-0000-0000-0000-0000000000f5','10000000-0000-0000-0000-000000003001','ffffffff-0000-0000-0000-0000000000f5','p','d','bbbbbbbb-0000-0000-0000-000000000001');
+ERROR:  new row for relation "trip" violates check constraint "trip_driver_matches_status"
+DETAIL:  Failing row contains (90000000-0000-0000-0000-0000000000f5, 10000000-0000-0000-0000-000000003001, bbbbbbbb-0000-0000-0000-000000000001, null, ffffffff-0000-0000-0000-0000000000f5, requested, p, d, null, null, null, null, null, null, null, null, null, null, null, 2026-10-07 20:56:28.519855+00, 2026-10-07 20:56:28.519855+00).
+\echo SQLSTATE :LAST_ERROR_SQLSTATE
+SQLSTATE 23514
+ROLLBACK TO s1;
+ROLLBACK
+\echo '=== after ROLLBACK TO the savepoint: the refused row is not there; the accepted trip of (i) still is, inside this transaction'
+=== after ROLLBACK TO the savepoint: the refused row is not there; the accepted trip of (i) still is, inside this transaction
+SELECT (SELECT count(*) FROM trip WHERE id='90000000-0000-0000-0000-0000000000f5') AS refused_row_present, (SELECT count(*) FROM trip WHERE id='90000000-0000-0000-0000-0000000000f4') AS accepted_row_present;
+ refused_row_present | accepted_row_present 
+---------------------+----------------------
+                   0 |                    1
+(1 row)
+
+ROLLBACK;
+ROLLBACK
+\echo '=== after the final ROLLBACK: nothing is kept'
+=== after the final ROLLBACK: nothing is kept
+SELECT (SELECT count(*) FROM trip WHERE id IN ('90000000-0000-0000-0000-0000000000f4','90000000-0000-0000-0000-0000000000f5')) AS trips_left, (SELECT count(*) FROM fare_quote WHERE id IN ('ffffffff-0000-0000-0000-0000000000f4','ffffffff-0000-0000-0000-0000000000f5')) AS quotes_left;
+ trips_left | quotes_left 
+------------+-------------
+          0 |           0
+(1 row)
+

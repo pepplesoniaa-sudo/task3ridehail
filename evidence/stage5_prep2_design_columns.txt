@@ -1,0 +1,69 @@
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+=== C1 person status columns the API reads to refuse a deleted rider, a deleted driver or a deactivated admin (D13)
+  table_name   | column_name |        data_type         | is_nullable 
+---------------+-------------+--------------------------+-------------
+ driver        | deleted_at  | timestamp with time zone | YES
+ driver        | id          | uuid                     | NO
+ rider         | deleted_at  | timestamp with time zone | YES
+ rider         | id          | uuid                     | NO
+ support_admin | deleted_at  | timestamp with time zone | YES
+ support_admin | id          | uuid                     | NO
+ support_admin | is_active   | boolean                  | NO
+(7 rows)
+
+=== C2 provider columns (D5): which fields the database side stores
+   table_name   |    column_name     |        data_type         | is_nullable 
+----------------+--------------------+--------------------------+-------------
+ payment        | amount_minor       | bigint                   | NO
+ payment        | currency           | character                | NO
+ payment        | provider_reference | text                     | NO
+ payment        | failure_reason     | text                     | YES
+ provider_event | id                 | uuid                     | NO
+ provider_event | provider_event_id  | text                     | NO
+ provider_event | provider_reference | text                     | NO
+ provider_event | event_type         | text                     | NO
+ provider_event | amount_minor       | bigint                   | YES
+ provider_event | currency           | character                | YES
+ provider_event | occurred_at        | timestamp with time zone | YES
+ provider_event | received_at        | timestamp with time zone | NO
+ provider_event | processed_at       | timestamp with time zone | YES
+ provider_event | outcome            | text                     | YES
+ provider_event | created_at         | timestamp with time zone | NO
+ provider_event | updated_at         | timestamp with time zone | NO
+ refund         | amount_minor       | bigint                   | NO
+ refund         | currency           | character                | NO
+ refund         | provider_reference | text                     | NO
+(19 rows)
+
+=== C3 uniqueness the provider contract relies on
+   table_name   |               conname                | contype 
+----------------+--------------------------------------+---------
+ payment        | payment_provider_reference_key       | u
+ provider_event | provider_event_provider_event_id_key | u
+ refund         | refund_provider_reference_key        | u
+(3 rows)
+
+=== C4 quote columns the estimator output must fit (D16)
+     column_name      |        data_type         | is_nullable 
+----------------------+--------------------------+-------------
+ amount_minor         | bigint                   | NO
+ currency             | character                | NO
+ estimated_distance_m | integer                  | NO
+ estimated_duration_s | integer                  | NO
+ expires_at           | timestamp with time zone | NO
+(5 rows)
+
+           conname            |                                                                                                                                                                                            definition                                                                                                                                                                                             
+------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ quote_amount_not_negative    | CHECK ((amount_minor >= 0))
+ quote_coordinates_valid      | CHECK ((((pickup_latitude >= ('-90'::integer)::numeric) AND (pickup_latitude <= (90)::numeric)) AND ((dropoff_latitude >= ('-90'::integer)::numeric) AND (dropoff_latitude <= (90)::numeric)) AND ((pickup_longitude >= ('-180'::integer)::numeric) AND (pickup_longitude <= (180)::numeric)) AND ((dropoff_longitude >= ('-180'::integer)::numeric) AND (dropoff_longitude <= (180)::numeric))))
+ quote_currency_ngn           | CHECK ((currency = 'NGN'::bpchar))
+ quote_estimates_not_negative | CHECK (((estimated_distance_m >= 0) AND (estimated_duration_s >= 0)))
+ quote_expires_after_created  | CHECK ((expires_at > created_at))
+(5 rows)
+

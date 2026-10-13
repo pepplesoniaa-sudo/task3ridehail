@@ -1,0 +1,97 @@
+##### LOGIN ROLE TEST 2026-10-06 22:25:40  (the password is generated in this command, held in a shell variable, never printed or written)
+--- create the role and make it a member of ridehail_app (the password goes to psql through stdin only)
+CREATE ROLE
+GRANT ROLE
+       rolname       | rolcanlogin | rolsuper | rolinherit | has_password |  stored_form   
+---------------------+-------------+----------+------------+--------------+----------------
+ ridehail_login_test | t           | f        | t          | t            | SCRAM-SHA-256$
+(1 row)
+
+--- a WRONG password over the container address is refused (proves password authentication is used on this path)
+psql: error: connection to server at "172.17.0.2", port 5432 failed: FATAL:  password authentication failed for user "ridehail_login_test"
+--- the real session, connected AS ridehail_login_test
+--- who am I? connected over the container address, not loopback, so password authentication applied
+    current_user     |    session_user     | not_loopback 
+---------------------+---------------------+--------------
+ ridehail_login_test | ridehail_login_test | t
+(1 row)
+
+       rolname       | rolcanlogin | rolsuper | rolinherit | is_member_of_ridehail_app | member_of_erasure_owner | member_of_writer | member_of_dev_superuser 
+---------------------+-------------+----------+------------+---------------------------+-------------------------+------------------+-------------------------
+ ridehail_login_test | t           | f        | t          | t                         | f                       | f                | f
+(1 row)
+
+--- 1. cannot INSERT into trip_status_history
+ERROR:  permission denied for table trip_status_history
+--- 2. cannot UPDATE a rating
+ERROR:  permission denied for table rating
+--- 3. can request a trip (bulk rider 3000, rolled back)
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT 0 1
+                  id                  |  status   |               rider_id               
+--------------------------------------+-----------+--------------------------------------
+ 93fbc6db-a475-4b90-b910-e2862e93e7eb | requested | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT 0 1
+ history_rows_written_for_it_by_the_trigger 
+--------------------------------------------
+                                          1
+(1 row)
+
+--- 4. RESET ROLE has no effect (no role was set)
+    current_user     |    session_user     
+---------------------+---------------------
+ ridehail_login_test | ridehail_login_test
+(1 row)
+
+--- 5. SET ROLE ridehail (the dev superuser) is refused
+ERROR:  permission denied to set role "ridehail"
+    current_user     |    session_user     
+---------------------+---------------------
+ ridehail_login_test | ridehail_login_test
+(1 row)
+
+--- 6. SET SESSION AUTHORIZATION ridehail is refused
+ERROR:  permission denied to set session authorization "ridehail"
+    current_user     |    session_user     
+---------------------+---------------------
+ ridehail_login_test | ridehail_login_test
+(1 row)
+
+--- 7. SET ROLE ridehail_erasure_owner and ridehail_writer are refused (not a member of them)
+ERROR:  permission denied to set role "ridehail_erasure_owner"
+ERROR:  permission denied to set role "ridehail_writer"
+    current_user     |    session_user     
+---------------------+---------------------
+ ridehail_login_test | ridehail_login_test
+(1 row)
+
+--- 8. what it MAY do: SET ROLE ridehail_app (it is a member), then go back
+SET
+ current_user |    session_user     
+--------------+---------------------
+ ridehail_app | ridehail_login_test
+(1 row)
+
+    current_user     |    session_user     
+---------------------+---------------------
+ ridehail_login_test | ridehail_login_test
+(1 row)
+
+--- 9. cannot call a writer function directly, cannot read pg_authid
+ERROR:  only a support actor may write a support note (actor <NULL> / <NULL>)
+CONTEXT:  PL/pgSQL function add_support_note(text,uuid,text) line 8 at RAISE
+ERROR:  permission denied for table pg_authid
+--- drop the role and prove it is gone
+DROP ROLE
+roles named ridehail_login_test now: 0
+roles ridehail%: ridehail, ridehail_app, ridehail_erasure_owner, ridehail_writer
+--- was the password written anywhere? (matches are COUNTED, the value is never shown)
+files under C:\dev\task3ridehail containing it: 0
+lines in the container log containing it:       0
+password length (not the value): 32 characters

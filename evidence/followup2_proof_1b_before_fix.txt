@@ -1,0 +1,136 @@
+################ E1: ridehail_app creates a TEMP table named audit_log and lets the writer insert into it (payment status change)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ public_audit_rows_for_payment_before 
+--------------------------------------
+                                    0
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ public_audit_rows_for_payment_after 
+-------------------------------------
+                                   0
+(1 row)
+
+ rows_that_went_into_the_temp_table 
+------------------------------------
+                                  1
+(1 row)
+
+################ E2: a TEMP table named trip_status_history (trip move by driver 3 on trip 10)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+ public_history_rows_before 
+----------------------------
+                          2
+(1 row)
+
+ERROR:  null value in column "seq" of relation "trip_status_history" violates not-null constraint
+DETAIL:  Failing row contains (trip_id, from_status, to_status, actor_role, actor_rider_id, actor_driver_id, actor_admin_id) = (eeeeeeee-0000-0000-0000-000000000010, assigned, arrived, driver, null, bbbbbbbb-0000-0000-0000-000000000003, null).
+CONTEXT:  SQL statement "INSERT INTO trip_status_history
+    (trip_id, from_status, to_status, actor_role, actor_rider_id, actor_driver_id, actor_admin_id)
+  VALUES
+    (NEW.id,
+     CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.status END,
+     NEW.status, r,
+     CASE WHEN r = 'rider'   THEN a END,
+     CASE WHEN r = 'driver'  THEN a END,
+     CASE WHEN r = 'support' THEN a END)"
+PL/pgSQL function trip_write_history() line 9 at SQL statement
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+################ E3: an attacker role that owns a schema earlier on the search path (attack_s) with its own audit_log and trip_status_history
+  attacker_is   | session_user 
+----------------+--------------
+ attacker_proof | ridehail
+(1 row)
+
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+   search_path    
+------------------
+ attack_s, public
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ eeeeeeee-0000-0000-0000-000000000010 | arrived
+(1 row)
+
+UPDATE 1
+ rows_in_public_audit_log_for_payment | rows_in_attacker_audit_log | rows_in_public_history_for_trip_10 | rows_in_attacker_history 
+--------------------------------------+----------------------------+------------------------------------+--------------------------
+                                    1 |                          0 |                                  3 |                        0
+(1 row)
+
+################ E4: the NON-definer triggers: a TEMP table named status_transition_rule allows a skipped move (assigned > started by driver 3)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+INSERT 0 1
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+                  id                  | status  | has_started_at 
+--------------------------------------+---------+----------------
+ eeeeeeee-0000-0000-0000-000000000010 | started | t
+(1 row)
+
+UPDATE 1
+--- control: the same skipped move WITHOUT the temp table is refused
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  illegal transition assigned -> started by driver
+CONTEXT:  PL/pgSQL function trip_enforce_transition() line 54 at RAISE

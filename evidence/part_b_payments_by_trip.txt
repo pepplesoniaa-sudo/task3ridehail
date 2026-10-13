@@ -1,0 +1,81 @@
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+=== K0 indexes of payment
+           indexname            |                                                                              indexdef                                                                              
+--------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ payment_one_live_per_purpose   | CREATE UNIQUE INDEX payment_one_live_per_purpose ON public.payment USING btree (trip_id, purpose) WHERE (status = ANY (ARRAY['pending'::text, 'succeeded'::text]))
+ payment_pending_created_at_idx | CREATE INDEX payment_pending_created_at_idx ON public.payment USING btree (created_at) WHERE (status = 'pending'::text)
+ payment_pkey                   | CREATE UNIQUE INDEX payment_pkey ON public.payment USING btree (id)
+ payment_provider_reference_key | CREATE UNIQUE INDEX payment_provider_reference_key ON public.payment USING btree (provider_reference)
+(4 rows)
+
+=== K1 all payments of a trip (what EP03 payments[] needs: every status, so a failed attempt is visible)
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather (actual time=13.140..16.511 rows=1 loops=1)
+   Workers Planned: 2
+   Workers Launched: 2
+   Buffers: shared hit=3427
+   ->  Parallel Seq Scan on payment (actual time=8.057..9.107 rows=0 loops=3)
+         Filter: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Rows Removed by Filter: 56470
+         Buffers: shared hit=3427
+ Planning:
+   Buffers: shared hit=74
+ Planning Time: 0.408 ms
+ Execution Time: 16.545 ms
+(12 rows)
+
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather (actual time=10.254..16.719 rows=1 loops=1)
+   Workers Planned: 2
+   Workers Launched: 2
+   Buffers: shared hit=3427
+   ->  Parallel Seq Scan on payment (actual time=8.612..10.645 rows=0 loops=3)
+         Filter: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Rows Removed by Filter: 56470
+         Buffers: shared hit=3427
+ Planning Time: 0.076 ms
+ Execution Time: 16.740 ms
+(10 rows)
+
+=== K2 live payments only (pending or succeeded): the predicate of the partial unique index payment_one_live_per_purpose repeated exactly
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Index Scan using payment_one_live_per_purpose on payment (actual time=1.222..1.225 rows=1 loops=1)
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+   Buffers: shared hit=1 read=3
+ Planning:
+   Buffers: shared hit=30
+ Planning Time: 0.275 ms
+ Execution Time: 1.247 ms
+(7 rows)
+
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Index Scan using payment_one_live_per_purpose on payment (actual time=0.020..0.021 rows=1 loops=1)
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+   Buffers: shared hit=4
+ Planning Time: 0.169 ms
+ Execution Time: 0.070 ms
+(5 rows)
+
+=== K3 what statuses do payments have, and how many trips have a failed payment (is K1 different from K2 in real data?)
+  status   | count  
+-----------+--------
+ failed    |      1
+ pending   |    399
+ succeeded | 169010
+(3 rows)
+
+=== K4 the partial index definition
+                                                                          pg_get_indexdef                                                                           
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ CREATE UNIQUE INDEX payment_one_live_per_purpose ON public.payment USING btree (trip_id, purpose) WHERE (status = ANY (ARRAY['pending'::text, 'succeeded'::text]))
+(1 row)
+

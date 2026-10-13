@@ -1,0 +1,62 @@
+##### GROUNDWORK (read only)
+2026-10-06 22:22:23
+ line_number | type  |   database    | user_name |  address  |  auth_method  
+-------------+-------+---------------+-----------+-----------+---------------
+         117 | local | {all}         | {all}     |           | trust
+         119 | host  | {all}         | {all}     | 127.0.0.1 | trust
+         121 | host  | {all}         | {all}     | ::1       | trust
+         124 | local | {replication} | {all}     |           | trust
+         125 | host  | {replication} | {all}     | 127.0.0.1 | trust
+         126 | host  | {replication} | {all}     | ::1       | trust
+         128 | host  | {all}         | {all}     | all       | scram-sha-256
+(7 rows)
+
+ log_statement 
+---------------
+ none
+(1 row)
+
+ log_connections 
+-----------------
+ off
+(1 row)
+
+ password_encryption 
+---------------------
+ scram-sha-256
+(1 row)
+
+          proname           | definer |         owner          |               config               | public_can_execute 
+----------------------------+---------+------------------------+------------------------------------+--------------------
+ add_support_note           | t       | ridehail_writer        | {"search_path=pg_catalog, public"} | f
+ erase_driver               | t       | ridehail_erasure_owner | {"search_path=pg_catalog, public"} | f
+ erase_rider                | t       | ridehail_erasure_owner | {"search_path=pg_catalog, public"} | f
+ payment_write_audit        | t       | ridehail_writer        | {"search_path=pg_catalog, public"} | t
+ provider_event_write_audit | t       | ridehail_writer        | {"search_path=pg_catalog, public"} | t
+ setting_write_audit        | t       | ridehail_writer        | {"search_path=pg_catalog, public"} | t
+ trip_write_history         | t       | ridehail_writer        | {"search_path=pg_catalog, public"} | t
+ append_only_guard          | f       | ridehail               |                                    | t
+ payment_enforce_rules      | f       | ridehail               |                                    | t
+ ping_enforce_trip_status   | f       | ridehail               |                                    | t
+ provider_event_guard       | f       | ridehail               |                                    | t
+ rating_block_change        | f       | ridehail               |                                    | t
+ rating_enforce_rules       | f       | ridehail               |                                    | t
+ rating_update_cache        | f       | ridehail               |                                    | t
+ refund_enforce_total       | f       | ridehail               |                                    | t
+ set_updated_at             | f       | ridehail               |                                    | t
+ trip_block_delete          | f       | ridehail               |                                    | t
+ trip_enforce_transition    | f       | ridehail               |                                    | t
+(18 rows)
+
+ app_can_create_temp | app_can_create_schema | app_can_create_in_public 
+---------------------+-----------------------+--------------------------
+ t                   | f                     | f
+(1 row)
+
+           indexrelname           | idx_scan | idx_tup_read 
+----------------------------------+----------+--------------
+ trip_status_history_pkey         |        0 |            0
+ trip_status_history_trip_idx     |     1213 |     11190532
+ trip_status_history_trip_seq_idx |       50 |      5592601
+(3 rows)
+

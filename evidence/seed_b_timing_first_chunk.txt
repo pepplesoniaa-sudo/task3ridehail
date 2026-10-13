@@ -1,0 +1,19 @@
+##### SEED B step 0 (people and quotes), set-based
+ ridehail_app | ridehail
+(1 row)
+
+INSERT 0 5000
+INSERT 0 800
+INSERT 0 800
+INSERT 0 200000
+RESET
+step 0 seconds: 15.8
+##### SEED B step 1, TIMING CHUNK: trips 1..2000 (to extrapolate before running everything)
+------------+------------
+ 1          | 2000
+(1 row)
+
+DO
+RESET
+chunk 1..2000 seconds: 31.1
+trips 2012, history 9381, payments 1705, ratings 864, pings 1352

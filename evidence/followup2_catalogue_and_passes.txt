@@ -1,0 +1,24 @@
+######## CATALOGUE CHECK after migrations 012 and 013
+TBL  : expected  16 actual  16 | missing in db: none | extra in db: none
+CON  : expected 116 actual 116 | missing in db: none | extra in db: none
+IDX  : expected  13 actual  13 | missing in db: none | extra in db: none
+TRG  : expected  27 actual  27 | missing in db: none | extra in db: none
+FN   : expected  18 actual  18 | missing in db: none | extra in db: none
+COL  : expected 165 actual 165 | missing in db: none | extra in db: none
+ROLE : expected   4 actual   4 | missing in db: none | extra in db: none
+TOTAL MISMATCHES: 0 | sequences: trip_status_history_seq_seq
+
+######## PASS 1 fields: tables 16 | fields in 02: 84 | columns in db not in 02: none | in 02 not in db: none
+######## PASS 2 constraints: names in q6/q7 147 | FK rows 22 unjustified: none | CHECK rows 66 not none-needed: 0 | PK/UNIQUE rows 32 without own index: 0
+index count from doc rows: constraint-backed 32 + chosen 9 = 41
+constraint-like tokens in docs not in q6/q7: payment_not_found, rating_window_days, request_timeout_seconds, quote_validity_seconds, payment_reconcile_after_seconds, request_timeout_check_interval_seconds, payment_reconcile_check_interval_seconds, driver_late_minutes_no_fee, payment_succeeded, payment_failed, refund_succeeded, setting_change, trip_status_history_trip_idx
+######## PASS 3 IDs: defined 26 | cited but undefined: none | defined but uncited: none
+
+######## STALE SCAN
+"Ten more"                   -
+"42 indexes"                 -
+"The design has 41"          -
+"was **not dropped**"        -
+"17 functions"               -
+"two roles"                  -
+mentions of trip_status_history_trip_idx per file: 02_:0 02b:0 03_:0 04_:2 05_:1

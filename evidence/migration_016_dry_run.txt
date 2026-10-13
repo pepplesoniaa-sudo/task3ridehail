@@ -1,0 +1,50 @@
+BEGIN
+=== D0 indexes in the database before the migration (inside the transaction)
+ indexes_before 
+----------------
+             41
+(1 row)
+
+=== D1 apply migration 016 (timed)
+Timing is on.
+CREATE INDEX
+Time: 493.435 ms
+Timing is off.
+=== D2 indexes after the migration, size of the new index
+ indexes_after 
+---------------
+            42
+(1 row)
+
+     index_name      |  bytes  |  mb  |                                definition                                
+---------------------+---------+------+--------------------------------------------------------------------------
+ payment_trip_id_idx | 5373952 | 5.13 | CREATE INDEX payment_trip_id_idx ON public.payment USING btree (trip_id)
+(1 row)
+
+ANALYZE
+=== D3 the all-payments-of-a-trip read inside the transaction: which plan now?
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Index Scan using payment_trip_id_idx on payment (actual time=0.217..0.219 rows=1 loops=1)
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+   Buffers: shared hit=1 read=3
+ Planning:
+   Buffers: shared hit=43 read=1
+ Planning Time: 0.378 ms
+ Execution Time: 0.236 ms
+(7 rows)
+
+=== D4 the FK now has an index on its referencing column: indexes of payment that start with trip_id
+          index_name          | is_partial 
+------------------------------+------------
+ payment_one_live_per_purpose | t
+ payment_trip_id_idx          | f
+(2 rows)
+
+ROLLBACK
+=== D5 after ROLLBACK: the index must not exist
+ indexes_after_rollback | index_exists 
+------------------------+--------------
+                     41 |            0
+(1 row)
+

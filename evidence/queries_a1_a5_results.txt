@@ -1,0 +1,153 @@
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+################ A1: a rider requests a trip
+--- A1.1 retry check (idempotency key)
+ response_status |                    response_body                    
+-----------------+-----------------------------------------------------
+             201 | {"trip_id": "40000000-0000-0000-0000-000000001000"}
+(1 row)
+
+--- A1.2 settings for fare and service area (only 4 settings exist in the placeholder set, the area and fare keys have no owner-approved value yet)
+ key | int_value 
+-----+-----------
+(0 rows)
+
+--- A1.3 create the quote, then the trip (rolled back)
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000002000
+(1 row)
+
+INSERT 0 1
+                  id                  |  status   |               rider_id               
+--------------------------------------+-----------+--------------------------------------
+ 87723152-f268-4431-afee-e26bd303ee0a | requested | 10000000-0000-0000-0000-000000002000
+(1 row)
+
+INSERT 0 1
+################ A2: a nearby driver accepts
+--- A2.1 open requests near the driver (rectangle of coordinates)
+                  id                  |   pickup_address   | pickup_latitude | pickup_longitude | amount_minor 
+--------------------------------------+--------------------+-----------------+------------------+--------------
+ 40000000-0000-0000-0000-000000199857 | BULK pickup 199857 |        6.485700 |         3.399900 |       335000
+ 40000000-0000-0000-0000-000000199856 | BULK pickup 199856 |        6.485600 |         3.399200 |       330000
+ 40000000-0000-0000-0000-000000199855 | BULK pickup 199855 |        6.485500 |         3.398500 |       325000
+ 40000000-0000-0000-0000-000000199854 | BULK pickup 199854 |        6.485400 |         3.397800 |       320000
+ 40000000-0000-0000-0000-000000199853 | BULK pickup 199853 |        6.485300 |         3.397100 |       315000
+ 40000000-0000-0000-0000-000000199852 | BULK pickup 199852 |        6.485200 |         3.396400 |       310000
+ 40000000-0000-0000-0000-000000199851 | BULK pickup 199851 |        6.485100 |         3.395700 |       305000
+ 40000000-0000-0000-0000-000000199850 | BULK pickup 199850 |        6.485000 |         3.395000 |       300000
+ 40000000-0000-0000-0000-000000199849 | BULK pickup 199849 |        6.484900 |         3.394300 |       295000
+ 40000000-0000-0000-0000-000000199848 | BULK pickup 199848 |        6.484800 |         3.393600 |       290000
+ 40000000-0000-0000-0000-000000199847 | BULK pickup 199847 |        6.484700 |         3.392900 |       285000
+ 40000000-0000-0000-0000-000000199846 | BULK pickup 199846 |        6.484600 |         3.392200 |       280000
+ 40000000-0000-0000-0000-000000199845 | BULK pickup 199845 |        6.484500 |         3.391500 |       275000
+ 40000000-0000-0000-0000-000000199844 | BULK pickup 199844 |        6.484400 |         3.390800 |       270000
+ 40000000-0000-0000-0000-000000199843 | BULK pickup 199843 |        6.484300 |         3.390100 |       265000
+ 40000000-0000-0000-0000-000000199842 | BULK pickup 199842 |        6.484200 |         3.389400 |       260000
+ 40000000-0000-0000-0000-000000199841 | BULK pickup 199841 |        6.484100 |         3.388700 |       255000
+ 40000000-0000-0000-0000-000000199840 | BULK pickup 199840 |        6.484000 |         3.388000 |       250000
+ 40000000-0000-0000-0000-000000199839 | BULK pickup 199839 |        6.483900 |         3.387300 |       245000
+ 40000000-0000-0000-0000-000000199838 | BULK pickup 199838 |        6.483800 |         3.386600 |       240000
+(20 rows)
+
+--- A2.2 the driver's vehicle
+                  id                  | plate_number 
+--------------------------------------+--------------
+ 30000000-0000-0000-0000-000000000400 | BLK-400-ZZ
+(1 row)
+
+--- A2.3 accept (rolled back)
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | 20000000-0000-0000-0000-000000000400
+(1 row)
+
+                  id                  |  status  | driver_name_snapshot | vehicle_plate_snapshot 
+--------------------------------------+----------+----------------------+------------------------
+ 40000000-0000-0000-0000-000000199850 | assigned | BULK Driver 400      | BLK-400-ZZ
+(1 row)
+
+UPDATE 1
+################ A3: the rider watches, the driver moves the trip
+--- A3.1 latest driver position
+ latitude | longitude |          recorded_at          
+----------+-----------+-------------------------------
+ 6.430000 |  3.390000 | 2025-10-24 04:38:00.519301+00
+(1 row)
+
+--- A3.2 driver moves the trip, assigned to arrived (rolled back)
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | 20000000-0000-0000-0000-000000000003
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ 40000000-0000-0000-0000-000000199303 | arrived
+(1 row)
+
+UPDATE 1
+--- A3.3 status timeline
+ from_status | to_status | actor_role |          created_at           
+-------------+-----------+------------+-------------------------------
+             | requested | rider      | 2026-10-06 18:11:00.519301+00
+ requested   | assigned  | driver     | 2026-10-06 18:11:00.519301+00
+ assigned    | arrived   | driver     | 2026-10-06 18:11:00.519301+00
+ arrived     | started   | driver     | 2026-10-06 18:11:00.519301+00
+ started     | completed | driver     | 2026-10-06 18:11:00.519301+00
+(5 rows)
+
+################ A4: the rider pays
+--- A4.1 look up the trip and what is owed
+                  id                  |  status   | fare_amount_minor | cancellation_fee_minor 
+--------------------------------------+-----------+-------------------+------------------------
+ 40000000-0000-0000-0000-000000001000 | completed |             80000 |                       
+(1 row)
+
+--- A4.2 start a cancellation-fee payment for the cancelled trip with a 50000 fee (rolled back)
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000002711
+(1 row)
+
+                  id                  |     purpose      | amount_minor | status  
+--------------------------------------+------------------+--------------+---------
+ 58f26be0-20c0-4851-b2f3-6f3dbe895581 | cancellation_fee |        50000 | pending
+(1 row)
+
+INSERT 0 1
+--- A4.3 provider callback for pending payment BULK-PRV-500: record the event, then apply it (rolled back)
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+                  id                  
+--------------------------------------
+ 4c96b903-f808-4e01-bc8c-45f44198c301
+(1 row)
+
+INSERT 0 1
+ provider_reference |  status   
+--------------------+-----------
+ BULK-PRV-500       | succeeded
+(1 row)
+
+UPDATE 1
+################ A5: both sides rate
+--- A5.1 rider rates trip 001001 (rolled back)
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000001920
+(1 row)
+
+                  id                  |               trip_id                | rater_role | stars 
+--------------------------------------+--------------------------------------+------------+-------
+ c0e0dd7f-dba3-4934-99e7-c9db7dda0326 | 40000000-0000-0000-0000-000000001001 | rider      |     5
+(1 row)
+
+INSERT 0 1

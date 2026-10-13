@@ -1,0 +1,37 @@
+BEGIN
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+INSERT 0 8
+               key               | int_value | currency 
+---------------------------------+-----------+----------
+ base_fare_minor                 |     50000 | NGN
+ cancellation_fee_minor          |     50000 | NGN
+ payment_reconcile_after_seconds |       900 | 
+ per_km_minor                    |     15000 | NGN
+ per_minute_minor                |      3000 | NGN
+ quote_validity_seconds          |       300 | 
+ rating_window_days              |         7 | 
+ request_timeout_seconds         |       600 | 
+ service_area_max_lat_e6         |   6700000 | 
+ service_area_max_lon_e6         |   3700000 | 
+ service_area_min_lat_e6         |   6380000 | 
+ service_area_min_lon_e6         |   3100000 | 
+(12 rows)
+
+     action     |            k            
+----------------+-------------------------
+ setting_change | base_fare_minor
+ setting_change | per_km_minor
+ setting_change | per_minute_minor
+ setting_change | quote_validity_seconds
+ setting_change | service_area_min_lat_e6
+ setting_change | service_area_max_lat_e6
+ setting_change | service_area_min_lon_e6
+ setting_change | service_area_max_lon_e6
+(8 rows)
+
+ROLLBACK

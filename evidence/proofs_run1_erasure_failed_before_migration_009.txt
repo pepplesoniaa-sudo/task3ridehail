@@ -1,0 +1,270 @@
+=================== THE THREE REJECTED INSERTS ===================
+--- 1. B1: rider 5 already has an active trip (trip 09, requested) and requests another
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000005
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "trip_one_active_per_rider"
+DETAIL:  Key (rider_id)=(aaaaaaaa-0000-0000-0000-000000000005) already exists.
+--- 2a. B7: rating on a trip that is not completed (trip 12 is started), by its rider
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000002
+(1 row)
+
+ERROR:  a rating needs a completed trip (status is started) (B7)
+CONTEXT:  PL/pgSQL function rating_enforce_rules() line 13 at RAISE
+--- 2b. B7: a second rating by the same side (rider 1 already rated trip 01)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "rating_one_per_role_per_trip"
+DETAIL:  Key (trip_id, rater_role)=(eeeeeeee-0000-0000-0000-000000000001, rider) already exists.
+--- 3a. B3: payment with currency USD for trip 01 (rider 1, correct amount 250000)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  new row for relation "payment" violates check constraint "payment_currency_ngn"
+DETAIL:  Failing row contains (2812167e-cd7b-4f30-8c1c-441eaf9d6b4e, eeeeeeee-0000-0000-0000-000000000001, fare, 250000, USD, pending, PRV-PROOF-USD, null, null, 2026-10-06 18:08:41.180069+00, 2026-10-06 18:08:41.180069+00).
+--- 3b. B3: payment with a negative amount (-5) for trip 01
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  payment amount -5 does not equal the trip fare 250000
+CONTEXT:  PL/pgSQL function payment_enforce_rules() line 25 at RAISE
+=================== EXTRA PROOFS ===================
+--- X1. B4: edit the fare of completed trip 01 (as driver 1)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  trip is completed (terminal): only updated_at may change (B4)
+CONTEXT:  PL/pgSQL function trip_enforce_transition() line 36 at RAISE
+--- X2. F9: driver 4 moves driver 3's assigned trip 10 to arrived
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  actor is not this trip's driver (F9)
+CONTEXT:  PL/pgSQL function trip_enforce_transition() line 57 at RAISE
+--- X3a. U4: a provider callback repeated, plain INSERT (evt-pay-t01 already stored)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  duplicate key value violates unique constraint "provider_event_provider_event_id_key"
+DETAIL:  Key (provider_event_id)=(evt-pay-t01) already exists.
+--- X3b. U4: the same callback with ON CONFLICT DO NOTHING (expect INSERT 0 0), then count rows for that id
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ id 
+----
+(0 rows)
+
+INSERT 0 0
+ rows_for_evt_pay_t01 
+----------------------
+                    1
+(1 row)
+
+--- X4a. B10: refund up to the payment amount is accepted (200000 more; 50000 already refunded of 250000)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ refunded_total | payment_amount 
+----------------+----------------
+         250000 |         250000
+(1 row)
+
+--- X4b. B10: a refund above the payment amount (250000 more when 50000 is already refunded)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  refunds 50000 + 250000 would exceed the payment amount 250000 (B10)
+CONTEXT:  PL/pgSQL function refund_enforce_total() line 18 at RAISE
+--- X5a. P3 WITHOUT proof: support fails pending payment PRV-T03-A, no payment_not_found event
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  support may fail a pending payment only after a payment_not_found event for this reference, received after the payment was created and not superseded by a later event (P3)
+CONTEXT:  PL/pgSQL function payment_enforce_rules() line 68 at RAISE
+--- X5b. P3 WITH proof: a payment_not_found event for PRV-T03-A is stored, then support fails the payment
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ provider_reference | status |         failure_reason          
+--------------------+--------+---------------------------------
+ PRV-T03-A          | failed | support: provider has no record
+(1 row)
+
+ actor_role |      action       | entity_type |                                                  details                                                  
+------------+-------------------+-------------+-----------------------------------------------------------------------------------------------------------
+ provider   | provider_conflict | payment     | {"event_type": "payment_not_found", "provider_event_id": "evt-nf-t03", "provider_reference": "PRV-T03-A"}
+ support    | status_change     | payment     | {"to": "failed", "from": "pending"}
+(2 rows)
+
+--- X5c. P3 with a SUPERSEDED proof: a later payment_succeeded event arrived after the payment_not_found event
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+--- X6a. Erasure BY FUNCTION: erase_rider(rider 1) as ridehail_app (rider 1 has only terminal trips)
+ERROR:  support may fail a pending payment only after a payment_not_found event for this reference, received after the payment was created and not superseded by a later event (P3)
+CONTEXT:  PL/pgSQL function payment_enforce_rules() line 68 at RAISE
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  permission denied for table rider
+CONTEXT:  SQL statement "UPDATE rider SET full_name = 'Deleted rider', phone = 'deleted-' || id::text, email = NULL,
+                   deleted_at = COALESCE(deleted_at, now())
+   WHERE id = p_rider"
+PL/pgSQL function erase_rider(uuid) line 15 at SQL statement
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+--- X6b. DIRECT erase refused: ridehail_app updates pickup_address of completed trip 01
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  trip is completed (terminal): only updated_at may change (B4)
+CONTEXT:  PL/pgSQL function trip_enforce_transition() line 36 at RAISE
+--- X6c. DIRECT comment blanking refused: ridehail_app updates a rating comment
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  permission denied for table rating
+--- X6d. erase_rider refused for a rider with an active trip (rider 2, trip 12 started)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  rider aaaaaaaa-0000-0000-0000-000000000002 has an active trip: cannot erase (B8)
+CONTEXT:  PL/pgSQL function erase_rider(uuid) line 8 at RAISE
+--- X6e. erase_driver(driver 1) as ridehail_app (driver 1 has only terminal trips)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  permission denied for table vehicle
+CONTEXT:  SQL statement "UPDATE vehicle SET plate_number = 'deleted-' || id::text, is_active = false,
+                     deleted_at = COALESCE(deleted_at, now())
+   WHERE driver_id = p_driver"
+PL/pgSQL function erase_driver(uuid) line 15 at SQL statement
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+--- X6f. a role with no grant cannot call the erasure function (SET ROLE to a role that has no EXECUTE: the dev login is a superuser, so use an unprivileged role created and dropped inside this transaction)
+      current_user      | session_user 
+------------------------+--------------
+ ridehail_proof_nogrant | ridehail
+(1 row)
+
+--- nothing left behind
+ERROR:  permission denied for function erase_rider
+ proof_roles_left | trips | payments | refunds | events | rider1_name 
+------------------+-------+----------+---------+--------+-------------
+                0 |    12 |        5 |       1 |      5 | Rider 1
+(1 row)
+

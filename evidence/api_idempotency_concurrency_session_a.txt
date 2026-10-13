@@ -1,0 +1,19 @@
+BEGIN
+SET
+ session_a_is 
+--------------
+ ridehail_app
+(1 row)
+
+    key     
+------------
+ race-key-1
+(1 row)
+
+INSERT 0 1
+ pg_sleep 
+----------
+ 
+(1 row)
+
+ROLLBACK

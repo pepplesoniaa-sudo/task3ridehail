@@ -1,0 +1,78 @@
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+=== M1 sizes of the JSON documents for trip 0001
+             label              | bytes | fields 
+--------------------------------+-------+--------
+ EP03 support view              |  1074 |     33
+ EP03 rider view                |   971 |     31
+ EP03 driver view               |   698 |     21
+ EP06 TripSummary item          |   358 |     11
+ NEEDED driver active-trip card |   309 |     10
+ NEEDED rider list row          |   221 |      7
+(6 rows)
+
+=== M2 the REST responses as the client would receive them (pretty printed here only for reading)
+                     ep03_rider_response                      
+--------------------------------------------------------------
+ {                                                           +
+     "id": "eeeeeeee-0000-0000-0000-000000000001",           +
+     "status": "completed",                                  +
+     "payments": [                                           +
+         {                                                   +
+             "id": "832d20bb-9b1c-4c41-90a1-435dfc71f92b",   +
+             "status": "succeeded",                          +
+             "purpose": "fare",                              +
+             "currency": "NGN",                              +
+             "amount_minor": 250000                          +
+         }                                                   +
+     ],                                                      +
+     "rider_id": "aaaaaaaa-0000-0000-0000-000000000001",     +
+     "created_at": "2026-10-06T18:07:13.612607Z",            +
+     "distance_m": 7100,                                     +
+     "started_at": "2026-10-06T18:07:13.612607Z",            +
+     "updated_at": "2026-10-06T18:07:13.612607Z",            +
+     "cancelled_at": null,                                   +
+     "completed_at": "2026-10-06T18:07:13.612607Z",          +
+     "fare_currency": "NGN",                                 +
+     "fare_quote_id": "ffffffff-0000-0000-0000-000000000001",+
+     "pickup_address": "Pickup 1, Lagos",                    +
+     "dropoff_address": "Dropoff 1, Lagos",                  +
+     "pickup_latitude": 6.453000,                            +
+     "dropoff_latitude": 6.501000,                           +
+     "pickup_longitude": 3.391000,                           +
+     "cancelled_by_role": null,                              +
+     "dropoff_longitude": 3.351000,                          +
+     "fare_amount_minor": 250000,                            +
+     "estimated_currency": "NGN",                            +
+     "driver_name_snapshot": "Driver 1",                     +
+     "cancellation_fee_minor": null,                         +
+     "estimated_amount_minor": 125000,                       +
+     "vehicle_plate_snapshot": "LAG-101-AA",                 +
+     "cancellation_fee_currency": null                       +
+ }
+(1 row)
+
+=== M3 the other REST calls a support console page needs for the same trip (EP04 history, EP18 ratings, EP16 payment with events and refunds)
+            call             | items_expected | bytes 
+-----------------------------+----------------+-------
+ EP04 status-history         |              5 |  1123
+ EP18 ratings                |              2 |   400
+ EP16 payment (support view) |              1 |   785
+(3 rows)
+
+=== M4 a rider list page: the rows of rider 777 (40 trips, bulk data), page of 20, EP06 TripSummary items against the five fields the row shows
+ items | summary_bytes | needed_bytes | pct_used | pct_ignored 
+-------+---------------+--------------+----------+-------------
+    20 |          7280 |         4675 |     64.2 |        35.8
+(1 row)
+
+=== M5 the same page, honest version: the rider row uses 6 of the 11 TripSummary fields; the driver name it also shows is NOT in TripSummary (contract gap). Cost of the two ways to get it:
+ items | rows_with_driver_name | summary_bytes | used_bytes | pct_used | pct_ignored | driver_name_bytes_if_added 
+-------+-----------------------+---------------+------------+----------+-------------+----------------------------
+    20 |                    20 |          7280 |       3860 |     53.0 |        47.0 |                        835
+(1 row)
+

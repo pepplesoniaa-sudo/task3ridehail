@@ -1,0 +1,11 @@
+refund|1
+cancel_fee|50000
+rating_window|7
+setting|14
+rule_rows|17
+provider_event|17544
+payment|169410
+audit|169026
+test_quotes|12
+history|932072
+trip|200012

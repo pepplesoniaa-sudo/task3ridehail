@@ -1,0 +1,32 @@
+=== P03 A2.1 open requests near the driver
+                                                                             QUERY PLAN                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5074.59..5074.62 rows=12 width=64) (actual time=3.351..3.359 rows=20 loops=1)
+   Buffers: shared hit=1713
+   ->  Sort  (cost=5074.59..5074.62 rows=12 width=64) (actual time=3.349..3.354 rows=20 loops=1)
+         Sort Key: t.created_at
+         Sort Method: quicksort  Memory: 27kB
+         Buffers: shared hit=1713
+         ->  Nested Loop  (cost=2150.91..5074.38 rows=12 width=64) (actual time=2.440..3.266 rows=22 loops=1)
+               Buffers: shared hit=1710
+               ->  Bitmap Heap Scan on trip t  (cost=2150.49..2154.51 rows=393 width=58) (actual time=0.649..1.209 rows=401 loops=1)
+                     Recheck Cond: ((status = ANY ('{requested,assigned,arrived,started}'::text[])) AND (status = 'requested'::text))
+                     Heap Blocks: exact=45
+                     Buffers: shared hit=106
+                     ->  BitmapAnd  (cost=2150.49..2150.49 rows=1 width=0) (actual time=0.598..0.599 rows=0 loops=1)
+                           Buffers: shared hit=61
+                           ->  Bitmap Index Scan on trip_one_active_per_driver  (cost=0.00..811.81 rows=707 width=0) (actual time=0.441..0.441 rows=708 loops=1)
+                                 Buffers: shared hit=57
+                           ->  Bitmap Index Scan on trip_requested_created_at_idx  (cost=0.00..1338.24 rows=393 width=0) (actual time=0.116..0.116 rows=403 loops=1)
+                                 Buffers: shared hit=4
+               ->  Index Scan using fare_quote_pkey on fare_quote q  (cost=0.42..7.43 rows=1 width=38) (actual time=0.005..0.005 rows=0 loops=401)
+                     Index Cond: (id = t.fare_quote_id)
+                     Filter: ((pickup_latitude >= 6.475) AND (pickup_latitude <= 6.495) AND (pickup_longitude >= 3.385) AND (pickup_longitude <= 3.405))
+                     Rows Removed by Filter: 1
+                     Buffers: shared hit=1604
+ Planning:
+   Buffers: shared hit=217
+ Planning Time: 1.863 ms
+ Execution Time: 3.416 ms
+(27 rows)
+

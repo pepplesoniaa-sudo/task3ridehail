@@ -1,0 +1,19 @@
+##### DRY RUN 009
+GRANT
+GRANT
+GRANT
+ROLLBACK
+##### APPLY 009 (psql -1 -v ON_ERROR_STOP=1)
+GRANT
+GRANT
+GRANT
+##### SHOW after 009: column privileges of ridehail_erasure_owner
+ table_name |                                                                           column_privileges                                                                            
+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ driver     | deleted_at:SELECT, id:SELECT, deleted_at:UPDATE, full_name:UPDATE, licence_number:UPDATE, phone:UPDATE
+ rating     | comment:SELECT, id:SELECT, rater_role:SELECT, trip_id:SELECT, comment:UPDATE
+ rider      | deleted_at:SELECT, id:SELECT, deleted_at:UPDATE, email:UPDATE, full_name:UPDATE, phone:UPDATE
+ trip       | driver_id:SELECT, id:SELECT, rider_id:SELECT, status:SELECT, driver_name_snapshot:UPDATE, dropoff_address:UPDATE, pickup_address:UPDATE, vehicle_plate_snapshot:UPDATE
+ vehicle    | deleted_at:SELECT, driver_id:SELECT, id:SELECT, deleted_at:UPDATE, is_active:UPDATE, plate_number:UPDATE
+(5 rows)
+

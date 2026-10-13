@@ -1,0 +1,27 @@
+######## CATALOGUE CHECK (docs 04 q6/q7 and 02 against the database)
+TBL  : expected  16 actual  16 | missing in db: none | extra in db: none
+CON  : expected 116 actual 116 | missing in db: none | extra in db: none
+IDX  : expected  14 actual  14 | missing in db: none | extra in db: none
+TRG  : expected  27 actual  27 | missing in db: none | extra in db: none
+FN   : expected  18 actual  18 | missing in db: none | extra in db: none
+COL  : expected 165 actual 165 | missing in db: none | extra in db: none
+ROLE : expected   4 actual   4 | missing in db: none | extra in db: none
+sequences in db: trip_status_history_seq_seq (the identity sequence of trip_status_history.seq)
+TOTAL MISMATCHES: 0
+
+######## PASS 1 fields: tables 16 | fields in 02: 84 | seq documented in trip_status_history: true
+columns in db but not in 02: none | columns in 02 but not in db: none
+######## PASS 2 constraints: names in q6/q7 148 | FK rows 22 unjustified: none | CHECK rows 66 not "none needed": 0 | PK/UNIQUE rows 32 without own index: 0
+index count from doc rows: constraint-backed 32 + chosen 10 = 42
+constraint-like tokens in docs not in q6/q7 (setting keys, event types, an audit action are not constraints): payment_not_found, rating_window_days, request_timeout_seconds, quote_validity_seconds, payment_reconcile_after_seconds, request_timeout_check_interval_seconds, payment_reconcile_check_interval_seconds, driver_late_minutes_no_fee, payment_succeeded, payment_failed, refund_succeeded, setting_change
+######## PASS 3 IDs: defined 26 | cited but undefined: none | defined but uncited: none
+
+######## STALE COUNT SCAN (phrases that must not remain)
+"The design has 41"    -
+"Nine more"            -
+"nine chosen"          -
+"17 functions"         -
+"two roles"            -
+"F1 to F18"            -
+"(13 rows)"            -
+"(35"                  -

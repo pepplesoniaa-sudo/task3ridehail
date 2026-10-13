@@ -1,0 +1,91 @@
+\set VERBOSITY default
+\set SHOW_CONTEXT never
+\echo '=== F3 race test, one transaction, rolled back at the end'
+=== F3 race test, one transaction, rolled back at the end
+BEGIN;
+BEGIN
+SET ROLE ridehail_app;
+SET
+SELECT current_user AS cu, session_user AS su;
+      cu      |    su    
+--------------+----------
+ ridehail_app | ridehail
+(1 row)
+
+\echo '=== a. rider 3000 (no active trip) requests a trip: new quote, then trip, actor rider'
+=== a. rider 3000 (no active trip) requests a trip: new quote, then trip, actor rider
+SELECT set_config('app.actor_role','rider',true), set_config('app.actor_id','10000000-0000-0000-0000-000000003000',true);
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT INTO fare_quote (id, rider_id, pickup_latitude, pickup_longitude, dropoff_latitude, dropoff_longitude, estimated_distance_m, estimated_duration_s, amount_minor, currency, expires_at)
+VALUES ('ffffffff-0000-0000-0000-0000000000f6','10000000-0000-0000-0000-000000003000',6.45,3.39,6.50,3.35,5000,900,120000,'NGN',now()+interval '1 hour');
+INSERT 0 1
+INSERT INTO trip (id, rider_id, fare_quote_id, pickup_address, dropoff_address)
+VALUES ('90000000-0000-0000-0000-0000000000f6','10000000-0000-0000-0000-000000003000','ffffffff-0000-0000-0000-0000000000f6','p','d')
+RETURNING id, status, driver_id, vehicle_id;
+                  id                  |  status   | driver_id | vehicle_id 
+--------------------------------------+-----------+-----------+------------
+ 90000000-0000-0000-0000-0000000000f6 | requested |           | 
+(1 row)
+
+INSERT 0 1
+\echo '=== b. the same rider cancels it (actor rider, requested to cancelled)'
+=== b. the same rider cancels it (actor rider, requested to cancelled)
+UPDATE trip SET status = 'cancelled' WHERE id = '90000000-0000-0000-0000-0000000000f6' RETURNING id, status, cancelled_by_role, cancellation_fee_minor;
+                  id                  |  status   | cancelled_by_role | cancellation_fee_minor 
+--------------------------------------+-----------+-------------------+------------------------
+ 90000000-0000-0000-0000-0000000000f6 | cancelled | rider             |                      0
+(1 row)
+
+UPDATE 1
+\echo '=== c. driver 1 then runs the accept WITH the guard (actor driver, driver 1, vehicle 1): expect UPDATE 0'
+=== c. driver 1 then runs the accept WITH the guard (actor driver, driver 1, vehicle 1): expect UPDATE 0
+SELECT set_config('app.actor_role','driver',true), set_config('app.actor_id','bbbbbbbb-0000-0000-0000-000000000001',true);
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000001
+(1 row)
+
+UPDATE trip SET status = 'assigned', driver_id = 'bbbbbbbb-0000-0000-0000-000000000001', vehicle_id = 'cccccccc-0000-0000-0000-000000000001'
+WHERE id = '90000000-0000-0000-0000-0000000000f6' AND status = 'requested';
+UPDATE 0
+\echo '=== c. the trip row afterwards: expect still cancelled, no driver'
+=== c. the trip row afterwards: expect still cancelled, no driver
+SELECT id, status, driver_id, vehicle_id, cancelled_by_role FROM trip WHERE id = '90000000-0000-0000-0000-0000000000f6';
+                  id                  |  status   | driver_id | vehicle_id | cancelled_by_role 
+--------------------------------------+-----------+-----------+------------+-------------------
+ 90000000-0000-0000-0000-0000000000f6 | cancelled |           |            | rider
+(1 row)
+
+\echo '=== d. the same accept WITHOUT the guard (WHERE id only): expect the terminal freeze error'
+=== d. the same accept WITHOUT the guard (WHERE id only): expect the terminal freeze error
+SAVEPOINT s_d;
+SAVEPOINT
+UPDATE trip SET status = 'assigned', driver_id = 'bbbbbbbb-0000-0000-0000-000000000001', vehicle_id = 'cccccccc-0000-0000-0000-000000000001'
+WHERE id = '90000000-0000-0000-0000-0000000000f6';
+ERROR:  trip is cancelled (terminal): only updated_at may change (B4)
+\echo SQLSTATE :LAST_ERROR_SQLSTATE
+SQLSTATE RH005
+ROLLBACK TO s_d;
+ROLLBACK
+\echo '=== the trip row after the failed unguarded accept: still cancelled'
+=== the trip row after the failed unguarded accept: still cancelled
+SELECT id, status, driver_id FROM trip WHERE id = '90000000-0000-0000-0000-0000000000f6';
+                  id                  |  status   | driver_id 
+--------------------------------------+-----------+-----------
+ 90000000-0000-0000-0000-0000000000f6 | cancelled | 
+(1 row)
+
+ROLLBACK;
+ROLLBACK
+\echo '=== after the final ROLLBACK: nothing is kept'
+=== after the final ROLLBACK: nothing is kept
+SELECT (SELECT count(*) FROM trip WHERE id = '90000000-0000-0000-0000-0000000000f6') AS trips_left, (SELECT count(*) FROM fare_quote WHERE id = 'ffffffff-0000-0000-0000-0000000000f6') AS quotes_left, (SELECT count(*) FROM trip_status_history WHERE trip_id = '90000000-0000-0000-0000-0000000000f6') AS history_left;
+ trips_left | quotes_left | history_left 
+------------+-------------+--------------
+          0 |           0 |            0
+(1 row)
+

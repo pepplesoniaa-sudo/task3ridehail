@@ -1,0 +1,123 @@
+# Chapter 7. Over fetching
+@SRC docs/07_over_fetching.md
+## The endpoint and why
+@P EP03 GET /v1/trips/{trip_id} (trip detail) is the one endpoint that gathers a trip row, the quote (coordinates, estimate), the driver and vehicle snapshot, and the payments, for three clients that need very different parts of it: the rider app, the driver app and the support console. It is also the endpoint the rider's app would poll to watch a trip (A3), so its size matters for every poll. The trip list (EP06) is used as a second measurement in section 3 because the rider's list row is the most common client need and it exposes a gap in the contract (see section 3, finding 1).
+@P What EP03 does not carry already limits the damage: the status history (EP04), the ratings (EP18) and the payment detail with refunds and provider events (EP16, support view) are separate endpoints. EP03 is the "medium" document, not an "everything" document.
+## The real response and its size
+@P Rider view of EP03 for the completed trip eeeeeeee-0000-0000-0000-000000000001 of the small seed (CONFIRMED, evidence/part_b_over_fetch_measurements.txt, M2; same values, keys reordered to the contract order for reading; the database returns keys in its own order, which does not matter to a client):
+@CODE
+{
+  "id": "eeeeeeee-0000-0000-0000-000000000001",
+  "status": "completed",
+  "rider_id": "aaaaaaaa-0000-0000-0000-000000000001",
+  "fare_quote_id": "ffffffff-0000-0000-0000-000000000001",
+  "pickup_address": "Pickup 1, Lagos",
+  "dropoff_address": "Dropoff 1, Lagos",
+  "pickup_latitude": 6.453000,
+  "pickup_longitude": 3.391000,
+  "dropoff_latitude": 6.501000,
+  "dropoff_longitude": 3.351000,
+  "estimated_amount_minor": 125000,
+  "estimated_currency": "NGN",
+  "driver_name_snapshot": "Driver 1",
+  "vehicle_plate_snapshot": "LAG-101-AA",
+  "started_at": "2026-10-06T18:07:13.612607Z",
+  "completed_at": "2026-10-06T18:07:13.612607Z",
+  "cancelled_at": null,
+  "cancelled_by_role": null,
+  "cancellation_fee_minor": null,
+  "cancellation_fee_currency": null,
+  "fare_amount_minor": 250000,
+  "fare_currency": "NGN",
+  "distance_m": 7100,
+  "payments": [
+    {"id": "832d20bb-9b1c-4c41-90a1-435dfc71f92b", "purpose": "fare", "status": "succeeded", "amount_minor": 250000, "currency": "NGN"}
+  ],
+  "created_at": "2026-10-06T18:07:13.612607Z",
+  "updated_at": "2026-10-06T18:07:13.612607Z"
+}
+@END
+@P (The fare here differs from the quote because seed A wrote its rows directly; the contract says the fare equals the quote at completion. This does not affect the measurement.)
+@P Size (CONFIRMED, M1; bytes are UTF-8 of the compact JSON, no spaces after : and ,; fields are top-level keys plus 5 keys per payment):
+@TBL 9
+Document | Fields | Bytes
+EP03 rider view | 31 | 971
+EP03 driver view | 21 | 698
+EP03 support view | 33 | 1,074
+EP06 TripSummary item, rider list, before the contract fix | 11 | 358
+EP06 TripSummary item, rider list, after the contract fix | 12 | 392
+@END
+@P Header bytes (status line, headers, TLS) are not counted. Gzip would shrink repeated field names and ids; I did not measure it.
+## What each client uses
+@TBL 9
+Client | What it shows | Fields it uses | Share of the response used | Share ignored
+Rider trip list row | status, pickup, dropoff, driver name, fare | id, status, pickup_address, dropoff_address, driver_name_snapshot, fare_amount_minor, fare_currency (7) | from EP06 after the contract fix: 7 of 12 fields = 58.3%; 4,675 of 8,095 bytes on a page of 20 = 57.8%. (If it called EP03 per row instead: 7 of 31 fields = 22.6%, 221 of 971 bytes = 22.8%) | EP06: 41.7% of fields, 42.2% of bytes. EP03 per row: 77.4% of fields, 77.2% of bytes
+Driver active trip card | where to pick up and drop off, the price | id, status, pickup_address, pickup_latitude, pickup_longitude, dropoff_address, dropoff_latitude, dropoff_longitude, estimated_amount_minor, estimated_currency (10) | 10 of 21 fields = 47.6%; 309 of 698 bytes = 44.3% | 52.4% of fields, 55.7% of bytes
+Support console, trip page | everything about one trip | all 33 fields of EP03 plus history, payment detail and ratings | 33 of 33 fields = 100% of EP03 | 0%, but it needs four requests: EP03 1,074 B + EP04 1,123 B + EP16 785 B + EP18 400 B = 3,382 B (CONFIRMED, M3)
+@END
+@P Finding 1 (a contract gap, now closed in the contract; not built). The rider list row shows the driver's name, but the list item TripSummary of EP06 had no driver_name_snapshot. Closed in Stage 4 close: 06_api_contracts.md now gives the rider's TripSummary the field driver_name_snapshot. Measured on the real list page (rider 10000000-0000-0000-0000-000000000777, 20 rows, CONFIRMED, evidence/part_b_tripsummary_with_driver_name.txt): before the fix the EP06 page was 7,280 B (11 fields per item, 358 B for the seed item); after the fix it is 8,095 B (12 fields, 392 B for the seed item), that is 815 B more per 20 rows. The list row then uses 7 of the 12 fields, 4,675 of 8,095 bytes = 57.8% used, 42.2% ignored.
+## The GraphQL design sketch
+@P The same need in GraphQL (design sketch, not run, nothing installed). Schema sketch for the types involved. Names are camel case as GraphQL convention; each maps to a column or a derived field.
+@CODE
+type Trip {
+  id: ID!
+  status: TripStatus!
+  pickup: Place!
+  dropoff: Place              # null for a driver before accepting (field-level rule, see section 5)
+  estimated: Money!           # estimated_amount_minor, estimated_currency
+  fare: Money                 # fare_amount_minor, fare_currency
+  cancellationFee: Money      # rider and support only
+  driver: DriverSnapshot      # rider and support only
+  distanceM: Int
+  startedAt: DateTime  completedAt: DateTime  cancelledAt: DateTime
+  payments: [Payment!]!       # rider and support only
+  history: [StatusEvent!]!    # one resolver, reads trip_status_history ordered by seq
+  ratings: [Rating!]!
+  createdAt: DateTime!
+}
+@END
+@P The rider list row (status, pickup, dropoff, driver name, fare):
+@CODE
+query RiderTripList($after: String) {
+  myTrips(first: 20, after: $after, status: [COMPLETED, CANCELLED]) {
+    items { id status pickup { address } dropoff { address } driver { name } fare { amountMinor currency } }
+    nextCursor
+  }
+}
+@END
+@P What it would return for the first item (values of the real seed trip 0001; the second to twentieth items have the same shape; the cursor is a placeholder):
+@CODE
+{"data": {"myTrips": {"items": [
+  {"id": "eeeeeeee-0000-0000-0000-000000000001", "status": "COMPLETED",
+   "pickup": {"address": "Pickup 1, Lagos"}, "dropoff": {"address": "Dropoff 1, Lagos"},
+   "driver": {"name": "Driver 1"}, "fare": {"amountMinor": 250000, "currency": "NGN"}}
+ ], "nextCursor": "****"}}}
+@END
+@P Size for the page of 20. The same seven fields as REST (the "needed" document) come to 4,675 B for the 20 rows of rider 777 (CONFIRMED; GraphQL's own envelope and nested keys such as pickup and fare would add some bytes that I did not compute). Against REST with the driver name in the summary (the contract after the fix), 8,095 B, that is about 3.4 KB less per page (about 42% of the body). GraphQL's saving on this need is therefore real but small in absolute terms.
+## When REST is still fine
+@P REST is the right start for this project. Three clients, all built by the same team, with the same release cycle. The over-fetch measured is 42.2% of an 8,095 B list page of 20 rows (about 3.4 KB; CONFIRMED, evidence/part_b_tripsummary_with_driver_name.txt, line 17: 20 items, 8095 page bytes, 4675 used bytes, 42.2 percent ignored). Nobody notices that on a phone connection compared with TLS setup and the radio waking up.
+@P Every endpoint here has an exact contract with its ownership check, its errors by HTTP status (06b), its idempotency and its index (CONFIRMED plans in 06). That is easy to test, to rate-limit and to cache. GraphQL would move all of that into resolvers. The expensive thing found is not the payload: finding 2 (a 14 to 17 ms sequential scan per trip read, before migration 016) would have been worse under GraphQL, because a resolver per row repeats it.
+@P For comparison, the first 12 lines of the EP03 rider response (section 2):
+@CODE
+{
+  "id": "eeeeeeee-0000-0000-0000-000000000001",
+  "status": "completed",
+  "rider_id": "aaaaaaaa-0000-0000-0000-000000000001",
+  "fare_quote_id": "ffffffff-0000-0000-0000-000000000001",
+  "pickup_address": "Pickup 1, Lagos",
+  "dropoff_address": "Dropoff 1, Lagos",
+  "pickup_latitude": 6.453000,
+  "pickup_longitude": 3.391000,
+  "dropoff_latitude": 6.501000,
+  "dropoff_longitude": 3.351000,
+  "estimated_amount_minor": 125000,
+@END
+@P How this API already limits over-fetching (CONFIRMED sizes): an EP06 item is 392 B (after the driver name was added) against 971 B for the EP03 rider view (60% smaller); EP03 returns 698 B to a driver, 971 B to a rider and 1,074 B to support, because the contract hides fields by caller (data minimisation, B8); history (1,123 B for 5 events), ratings (400 B) and payment detail with events and refunds (785 B) are not in EP03; and an ETag on EP03 lets an unchanged trip be answered with a 304 and no 971 B body, though the server still runs the read (0.14 to 0.32 ms after migration 016, 13.8 to 14.3 ms before), so ETag saves bytes, not database time.
+@P Cheap REST changes to make before considering GraphQL (none is built; decisions 2 to 4 below): driver_name_snapshot is in the rider's TripSummary (done in the contract, so the list row needs no second call, +815 B per 20 row page); a fields parameter on EP03 and the lists, with an allow-list per role (for example ?fields=id,status,driver_name_snapshot), which gives the rider list row and the driver card the same 221 B and 309 B as the GraphQL queries; an expand parameter for the support console (?expand=history,payments,ratings), allowed for support only, which turns four requests into one; and a separate lightweight endpoint, only if a screen is hit very often. The payments lookup is served by payment_trip_id_idx (migration 016, decision 3).
+@P When I would switch to GraphQL (any one is a reason to measure, two together are a reason to move): many client types with very different needs; a mobile bandwidth or latency problem measured in production; the number of one-off endpoints or fields variants growing; screens that assemble data from many resources becoming the main way clients use the API, so that round trips, not bytes, dominate.
+## Decisions
+@B Stay on REST for the MVP. GraphQL is not needed for three internal clients; revisit on the switch points above.
+@B Add driver_name_snapshot to the rider's TripSummary (EP06). DONE in the contract in Stage 4 close (06_api_contracts.md); not built.
+@B Fix the payments-by-trip read. DONE: migration 016 added the ordinary index; the alternative not used was limiting EP03's payments to live payments. No migration was added in Part B; migration 016 was added in Stage 4 close.
+@B Optionally add fields and expand to EP03 and the lists when a client needs them, with the allow-lists above. Not built.
+@P The measuring queries for this chapter are db/queries/measure_over_fetch.sql, db/queries/measure_tripsummary_with_driver_name.sql and db/queries/part_b_payments_by_trip.sql.

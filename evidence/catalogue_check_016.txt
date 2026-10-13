@@ -1,0 +1,33 @@
+######## CATALOGUE CHECK AND THREE PASSES after migration 016 and the document updates (2026-10-07T15:48Z)
+######## CATALOGUE CHECK
+TBL  : documents   16 | database   16 | in documents not in database: none | in database not in documents: none
+CON  : documents  116 | database  116 | in documents not in database: none | in database not in documents: none
+IDX  : documents   42 | database   42 | in documents not in database: none | in database not in documents: none
+TRG  : documents   27 | database   27 | in documents not in database: none | in database not in documents: none
+FN   : database 18 | named in documents: 18 | not named: none
+ROLE : database 4 (ridehail,ridehail_app,ridehail_erasure_owner,ridehail_writer)
+TOTAL MISMATCHES: 0
+
+######## PASS 1 fields (docs\02 against database columns)
+tables 16 | columns in database 165 | field rows in docs\02 165 | columns in db not in 02: none | in 02 not in db: none
+
+######## PASS 2 constraints and indexes (docs\04 question 6 and 7)
+FK rows 22 without a justification text: 0 | CHECK rows 66 not "none needed": 0 | PK/UNIQUE rows 32
+index count from documents: constraint-backed 32 + chosen 10 = 42 | database indexes 42
+
+######## PASS 3 requirement IDs (docs\01 against the other documents)
+defined 26 | cited but undefined: none | defined but not in docs\05: none
+
+######## STALE SCAN (current documents only; before_fix files excluded)
+"Indexes are now 41" -> none
+"41 indexes" -> none
+"chosen 9" -> none
+"835 B" -> docs/07_over_fetching.md 
+"16.7 ms" -> none
+"no value chosen" -> none
+"returns 0 rows" -> none
+"was not dropped" -> none
+"17 functions" -> none
+(835 B remains in 07 only inside the sentence that corrects the Part B figure to 815 B)
+index counts stated in current docs:       1 10 chosen;      1 Indexes were then 41;
+class notes: docs/07_over_fetching.md:2 docs/08_real_time.md:2 docs/09_open_items.md:1 

@@ -1,0 +1,81 @@
+################ 1a: provider_event_write_audit, the REFUND branch
+--- the refund that exists in the small set (reference RF-T01-A)
+              refund_id               | provider_reference | amount_minor 
+--------------------------------------+--------------------+--------------
+ 064a53dd-aa3d-4b16-b026-75fb910e5e30 | RF-T01-A           |        50000
+(1 row)
+
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ audit_rows_for_refund_before 
+------------------------------
+                            0
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+INSERT 0 1
+--- the audit row: entity_type must be refund and entity_id the refund id
+ actor_role |      action       | entity_type |              entity_id               |              refund_id               | entity_id_is_the_refund | provider_reference |    event_type    
+------------+-------------------+-------------+--------------------------------------+--------------------------------------+-------------------------+--------------------+------------------
+ provider   | provider_conflict | refund      | 064a53dd-aa3d-4b16-b026-75fb910e5e30 | 064a53dd-aa3d-4b16-b026-75fb910e5e30 | t                       | RF-T01-A           | refund_succeeded
+(1 row)
+
+ audit_rows_for_refund_after 
+-----------------------------
+                           1
+(1 row)
+
+ proof_event_left_behind 
+-------------------------
+                       0
+(1 row)
+
+################ 1c: the timeline query (ORDER BY seq) on a bulk trip NOT among the 62, and on one that IS
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+--- not affected: bulk trip 40000000-...-000100
+ seq | from_status | to_status | actor_role 
+-----+-------------+-----------+------------
+ 504 |             | requested | rider
+ 505 | requested   | assigned  | driver
+ 506 | assigned    | arrived   | driver
+ 507 | arrived     | started   | driver
+ 508 | started     | completed | driver
+(5 rows)
+
+--- affected: bulk trip 40000000-...-002845, ORDER BY seq (what the timeline query returns)
+  seq  | from_status | to_status | actor_role 
+-------+-------------+-----------+------------
+ 13160 | started     | completed | driver
+ 13251 |             | requested | rider
+ 13252 | requested   | assigned  | driver
+ 13253 | assigned    | arrived   | driver
+ 13254 | arrived     | started   | driver
+(5 rows)
+
+--- the same trip with the rows in their true order (follow the chain: each row starts where the previous one ended)
+ step |  seq  | from_status | to_status 
+------+-------+-------------+-----------
+    1 | 13251 |             | requested
+    2 | 13252 | requested   | assigned
+    3 | 13253 | assigned    | arrived
+    4 | 13254 | arrived     | started
+    5 | 13160 | started     | completed
+(5 rows)
+
+--- how many of the 62 affected trips are the same shape: the LAST row (to_status completed) has the smallest seq
+ affected_trips | where_completed_row_is_first_by_seq 
+----------------+-------------------------------------
+             62 |                                  23
+(1 row)
+

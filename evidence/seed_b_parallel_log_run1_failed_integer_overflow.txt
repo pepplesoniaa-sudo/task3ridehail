@@ -1,0 +1,15 @@
+##### SEED B parallel load of terminal trips t=2001..199300, 4 sessions (t mod 4 = 0..3), chunks of 20000, all triggers ON
+start: 2026-10-06 19:12:46
+session 3 chunk 2001..22000 rc=3 seconds=170 at 19:15:37
+session 3 FAILED, see seed_b_parallel_err_3.txt
+session 3 finished at 19:15:37
+session 1 chunk 2001..22000 rc=3 seconds=175 at 19:15:42
+session 1 FAILED, see seed_b_parallel_err_1.txt
+session 1 finished at 19:15:43
+session 2 chunk 2001..22000 rc=3 seconds=185 at 19:15:52
+session 2 FAILED, see seed_b_parallel_err_2.txt
+session 2 finished at 19:15:53
+session 0 chunk 2001..22000 rc=3 seconds=195 at 19:16:02
+session 0 FAILED, see seed_b_parallel_err_0.txt
+session 0 finished at 19:16:02
+end: 2026-10-06 19:16:02

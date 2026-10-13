@@ -1,0 +1,17 @@
+##### APPLY 014 (psql -1 -v ON_ERROR_STOP=1)
+REVOKE
+apply seconds: 0.6
+##### SHOW after 014
+        rolname         | may_create_temp_tables | may_connect | rolsuper 
+------------------------+------------------------+-------------+----------
+ ridehail               | t                      | t           | t
+ ridehail_app           | f                      | t           | f
+ ridehail_erasure_owner | f                      | t           | f
+ ridehail_writer        | f                      | t           | f
+(4 rows)
+
+     datname     |               datacl                
+-----------------+-------------------------------------
+ ridehail_design | {=c/ridehail,ridehail=CTc/ridehail}
+(1 row)
+

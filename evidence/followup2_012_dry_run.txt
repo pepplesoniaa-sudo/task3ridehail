@@ -1,0 +1,108 @@
+##### DRY RUN 012 (BEGIN ... ROLLBACK) with real moves as ridehail_app after the revoke
+BEGIN
+DROP INDEX
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+          proname           | app_may_execute | public_may_execute | owner_may_execute 
+----------------------------+-----------------+--------------------+-------------------
+ payment_write_audit        | f               | f                  | t
+ provider_event_write_audit | f               | f                  | t
+ setting_write_audit        | f               | f                  | t
+ trip_write_history         | f               | f                  | t
+(4 rows)
+
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ eeeeeeee-0000-0000-0000-000000000010 | arrived
+(1 row)
+
+UPDATE 1
+ has_seq | from_status | to_status | actor_role |           actor_driver_id            
+---------+-------------+-----------+------------+--------------------------------------
+ t       | assigned    | arrived   | driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ actor_role |    action     | entity_type |                details                 
+------------+---------------+-------------+----------------------------------------
+ provider   | status_change | payment     | {"to": "succeeded", "from": "pending"}
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+          key           | int_value 
+------------------------+-----------
+ cancellation_fee_minor |     56000
+(1 row)
+
+UPDATE 1
+ actor_role |     action     |                            details                            
+------------+----------------+---------------------------------------------------------------
+ support    | setting_change | {"to": 56000, "key": "cancellation_fee_minor", "from": 50000}
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+INSERT 0 1
+ actor_role |      action       | entity_type 
+------------+-------------------+-------------
+ provider   | provider_conflict | refund
+(1 row)
+
+--- diagnostic 0a after the drop
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Aggregate
+   ->  GroupAggregate
+         Group Key: trip_status_history.trip_id
+         Filter: (count(*) > 1)
+         ->  Index Only Scan using trip_status_history_trip_seq_idx on trip_status_history
+(5 rows)
+
+--- diagnostic 0c (legacy order) after the drop
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   ->  Subquery Scan on x
+         Filter: (((x.rn = 1) AND (x.from_status IS NOT NULL)) OR ((x.rn > 1) AND (x.from_status IS DISTINCT FROM x.prev_to)))
+         ->  WindowAgg
+               ->  Incremental Sort
+                     Sort Key: trip_status_history.trip_id, trip_status_history.created_at, trip_status_history.id
+                     Presorted Key: trip_status_history.trip_id
+                     ->  Index Scan using trip_status_history_trip_seq_idx on trip_status_history
+(8 rows)
+
+ROLLBACK
+dry run seconds: 1.3
+##### after the dry run nothing changed:
+old index still exists: 1
+public may execute trip_write_history: true
+proof event left: 0

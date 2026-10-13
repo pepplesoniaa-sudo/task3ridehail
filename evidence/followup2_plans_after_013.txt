@@ -1,0 +1,272 @@
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+=== P01 A1.1 retry check
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idem_one_key_per_rider_action on idempotency_key  (cost=0.41..8.44 rows=1 width=58) (actual time=0.101..0.103 rows=1 loops=1)
+   Index Cond: ((rider_id = '10000000-0000-0000-0000-000000004001'::uuid) AND (action = 'request_trip'::text) AND (key = 'bulk-1000'::text))
+   Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=104
+ Planning Time: 0.538 ms
+ Execution Time: 0.151 ms
+(7 rows)
+
+=== P02 A1.3 insert the trip (the trigger checks actor, quote and the one-active-trip index)
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000002000
+(1 row)
+
+INSERT 0 1
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Insert on trip  (cost=0.00..0.02 rows=0 width=0) (actual time=5.967..5.968 rows=0 loops=1)
+   Buffers: shared hit=249 read=1 dirtied=1
+   ->  Result  (cost=0.00..0.02 rows=1 width=364) (actual time=0.029..0.030 rows=1 loops=1)
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.067 ms
+ Trigger for constraint trip_rider_id_fkey: time=0.254 calls=1
+ Trigger for constraint trip_driver_id_fkey: time=0.085 calls=1
+ Trigger for constraint trip_vehicle_belongs_to_driver: time=0.032 calls=1
+ Trigger for constraint trip_quote_belongs_to_rider: time=0.158 calls=1
+ Trigger trip_enforce_transition: time=2.885 calls=1
+ Trigger trip_write_history: time=3.535 calls=1
+ Execution Time: 10.073 ms
+(13 rows)
+
+=== P03 A2.1 open requests near the driver
+                                                                             QUERY PLAN                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5169.00..5169.03 rows=12 width=64) (actual time=1.068..1.072 rows=20 loops=1)
+   Buffers: shared hit=1727
+   ->  Sort  (cost=5169.00..5169.03 rows=12 width=64) (actual time=1.067..1.069 rows=20 loops=1)
+         Sort Key: t.created_at
+         Sort Method: quicksort  Memory: 27kB
+         Buffers: shared hit=1727
+         ->  Nested Loop  (cost=2151.06..5168.78 rows=12 width=64) (actual time=0.635..1.044 rows=22 loops=1)
+               Buffers: shared hit=1724
+               ->  Bitmap Heap Scan on trip t  (cost=2150.64..2154.65 rows=407 width=58) (actual time=0.159..0.325 rows=401 loops=1)
+                     Recheck Cond: ((status = ANY ('{requested,assigned,arrived,started}'::text[])) AND (status = 'requested'::text))
+                     Heap Blocks: exact=59
+                     Buffers: shared hit=120
+                     ->  BitmapAnd  (cost=2150.64..2150.64 rows=1 width=0) (actual time=0.139..0.140 rows=0 loops=1)
+                           Buffers: shared hit=61
+                           ->  Bitmap Index Scan on trip_one_active_per_driver  (cost=0.00..811.88 rows=720 width=0) (actual time=0.108..0.109 rows=734 loops=1)
+                                 Buffers: shared hit=57
+                           ->  Bitmap Index Scan on trip_requested_created_at_idx  (cost=0.00..1338.31 rows=407 width=0) (actual time=0.023..0.023 rows=428 loops=1)
+                                 Buffers: shared hit=4
+               ->  Index Scan using fare_quote_pkey on fare_quote q  (cost=0.42..7.41 rows=1 width=38) (actual time=0.002..0.002 rows=0 loops=401)
+                     Index Cond: (id = t.fare_quote_id)
+                     Filter: ((pickup_latitude >= 6.475) AND (pickup_latitude <= 6.495) AND (pickup_longitude >= 3.385) AND (pickup_longitude <= 3.405))
+                     Rows Removed by Filter: 1
+                     Buffers: shared hit=1604
+ Planning:
+   Buffers: shared hit=217
+ Planning Time: 0.912 ms
+ Execution Time: 1.133 ms
+(27 rows)
+
+=== P04 A2.2 the driver's vehicle
+                                                           QUERY PLAN                                                           
+--------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using vehicle_driver_id_idx on vehicle  (cost=0.28..8.29 rows=1 width=26) (actual time=0.018..0.019 rows=1 loops=1)
+   Index Cond: (driver_id = '20000000-0000-0000-0000-000000000400'::uuid)
+   Filter: (is_active AND (deleted_at IS NULL))
+   Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=77
+ Planning Time: 0.414 ms
+ Execution Time: 0.037 ms
+(8 rows)
+
+=== P05 A2.3 accept
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | 20000000-0000-0000-0000-000000000400
+(1 row)
+
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ Update on trip  (cost=0.42..8.44 rows=0 width=0) (actual time=3.782..3.783 rows=0 loops=1)
+   Buffers: shared hit=277
+   ->  Index Scan using trip_pkey on trip  (cost=0.42..8.44 rows=1 width=70) (actual time=0.023..0.026 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000199850'::uuid)
+         Filter: (status = 'requested'::text)
+         Buffers: shared hit=6
+ Planning Time: 0.213 ms
+ Trigger for constraint trip_driver_id_fkey: time=0.210 calls=1
+ Trigger for constraint trip_vehicle_belongs_to_driver: time=0.157 calls=1
+ Trigger set_updated_at: time=0.138 calls=1
+ Trigger trip_enforce_transition: time=3.279 calls=1
+ Trigger trip_write_history: time=2.413 calls=1
+ Execution Time: 6.688 ms
+(13 rows)
+
+=== P06 A3.1 latest driver position
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..4.27 rows=1 width=22) (actual time=0.020..0.020 rows=1 loops=1)
+   Buffers: shared hit=4
+   ->  Index Scan using location_ping_trip_recorded_idx on location_ping  (cost=0.42..11.98 rows=3 width=22) (actual time=0.019..0.019 rows=1 loops=1)
+         Index Cond: (trip_id = '40000000-0000-0000-0000-000000000100'::uuid)
+         Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=49
+ Planning Time: 0.333 ms
+ Execution Time: 0.042 ms
+(9 rows)
+
+=== P07 A3.2 driver moves the trip
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | 20000000-0000-0000-0000-000000000003
+(1 row)
+
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
+ Update on trip  (cost=0.28..8.30 rows=0 width=0) (actual time=1.398..1.398 rows=0 loops=1)
+   Buffers: shared hit=35
+   ->  Index Scan using trip_one_active_per_driver on trip  (cost=0.28..8.30 rows=1 width=38) (actual time=0.041..0.044 rows=1 loops=1)
+         Index Cond: (driver_id = '20000000-0000-0000-0000-000000000003'::uuid)
+         Filter: ((id = '40000000-0000-0000-0000-000000199303'::uuid) AND (status = 'assigned'::text))
+         Buffers: shared hit=4
+ Planning Time: 0.161 ms
+ Trigger set_updated_at: time=0.038 calls=1
+ Trigger trip_enforce_transition: time=0.969 calls=1
+ Trigger trip_write_history: time=2.402 calls=1
+ Execution Time: 3.830 ms
+(11 rows)
+
+=== P08 A3.3 status timeline
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using trip_status_history_trip_seq_idx on trip_status_history  (cost=0.42..15.64 rows=5 width=39) (actual time=0.025..0.028 rows=5 loops=1)
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000000100'::uuid)
+   Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=31
+ Planning Time: 0.187 ms
+ Execution Time: 0.049 ms
+(7 rows)
+
+=== P09 A4.1 trip lookup
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Index Scan using trip_pkey on trip  (cost=0.42..8.44 rows=1 width=41) (actual time=0.025..0.026 rows=1 loops=1)
+   Index Cond: (id = '40000000-0000-0000-0000-000000001000'::uuid)
+   Filter: (rider_id = '10000000-0000-0000-0000-000000004001'::uuid)
+   Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=6
+ Planning Time: 0.215 ms
+ Execution Time: 0.048 ms
+(8 rows)
+
+=== P10 A4.2 start a payment
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000002711
+(1 row)
+
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
+ Insert on payment  (cost=0.00..0.02 rows=0 width=0) (actual time=3.415..3.415 rows=0 loops=1)
+   Buffers: shared hit=139 read=3 dirtied=2
+   ->  Result  (cost=0.00..0.02 rows=1 width=208) (actual time=0.035..0.036 rows=1 loops=1)
+ Planning Time: 0.046 ms
+ Trigger for constraint payment_trip_id_fkey: time=0.235 calls=1
+ Trigger payment_enforce_rules: time=1.156 calls=1
+ Execution Time: 3.676 ms
+(7 rows)
+
+=== P11a A4.3 callback: record the event
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Insert on provider_event  (cost=0.00..0.02 rows=0 width=0) (actual time=0.700..0.700 rows=0 loops=1)
+   Conflict Resolution: NOTHING
+   Conflict Arbiter Indexes: provider_event_provider_event_id_key
+   Tuples Inserted: 1
+   Conflicting Tuples: 0
+   Buffers: shared hit=14 read=1 dirtied=1
+   ->  Result  (cost=0.00..0.02 rows=1 width=208) (actual time=0.026..0.027 rows=1 loops=1)
+ Planning:
+   Buffers: shared hit=39
+ Planning Time: 0.169 ms
+ Trigger provider_event_write_audit: time=0.451 calls=1
+ Execution Time: 1.178 ms
+(12 rows)
+
+=== P11b A4.3 callback: apply it to the payment
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
+ Update on payment  (cost=0.42..8.44 rows=0 width=0) (actual time=2.135..2.135 rows=0 loops=1)
+   Buffers: shared hit=34 read=1 dirtied=1
+   ->  Index Scan using payment_provider_reference_key on payment  (cost=0.42..8.44 rows=1 width=46) (actual time=0.049..0.051 rows=1 loops=1)
+         Index Cond: (provider_reference = 'BULK-PRV-500'::text)
+         Filter: (status = 'pending'::text)
+         Buffers: shared hit=6
+ Planning:
+   Buffers: shared hit=14
+ Planning Time: 0.239 ms
+ Trigger payment_enforce_rules: time=1.201 calls=1
+ Trigger payment_write_audit: time=2.460 calls=1
+ Trigger set_updated_at: time=0.058 calls=1
+ Execution Time: 4.666 ms
+(13 rows)
+
+=== P12 A5.1 rate
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000001920
+(1 row)
+
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Insert on rating  (cost=0.00..0.02 rows=0 width=0) (actual time=2.878..2.878 rows=0 loops=1)
+   Buffers: shared hit=132 read=2 dirtied=1
+   ->  Result  (cost=0.00..0.02 rows=1 width=114) (actual time=0.100..0.101 rows=1 loops=1)
+ Planning Time: 0.034 ms
+ Trigger for constraint rating_trip_id_fkey: time=0.241 calls=1
+ Trigger rating_enforce_rules: time=1.505 calls=1
+ Trigger rating_update_cache: time=0.729 calls=1
+ Execution Time: 3.869 ms
+(8 rows)
+
+=== P13 history list, keyset page 1 for rider 777 (not one of A1 to A5)
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..82.77 rows=20 width=33) (actual time=0.028..0.089 rows=20 loops=1)
+   Buffers: shared hit=23
+   ->  Index Scan using trip_rider_history_idx on trip  (cost=0.42..165.11 rows=40 width=33) (actual time=0.027..0.085 rows=20 loops=1)
+         Index Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+         Buffers: shared hit=23
+ Planning:
+   Buffers: shared hit=5
+ Planning Time: 0.133 ms
+ Execution Time: 0.125 ms
+(9 rows)
+
+=== P14 reconciliation job: pending payments older than 900 seconds
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..231.62 rows=100 width=39) (actual time=0.012..0.396 rows=100 loops=1)
+   Buffers: shared hit=115
+   ->  Index Scan using payment_pending_created_at_idx on payment  (cost=0.28..992.72 rows=429 width=39) (actual time=0.011..0.377 rows=100 loops=1)
+         Index Cond: (created_at < (now() - '00:15:00'::interval))
+         Buffers: shared hit=115
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.207 ms
+ Execution Time: 0.431 ms
+(9 rows)
+

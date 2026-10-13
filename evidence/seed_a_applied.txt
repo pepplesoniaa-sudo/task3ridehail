@@ -1,0 +1,25 @@
+##### SEED A start: 19:07:12
+SET
+  seeding_as  | login_session 
+--------------+---------------
+ ridehail_app | ridehail
+(1 row)
+
+INSERT 0 2
+INSERT 0 5
+INSERT 0 5
+INSERT 0 5
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+INSERT 0 4
+DO
+DO
+DO
+INSERT 0 3
+INSERT 0 2
+INSERT 0 1
+RESET
+##### SEED A end: 19:07:14  elapsed seconds: 1.99108

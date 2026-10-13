@@ -1,0 +1,90 @@
+##### APPLY 012 (psql -1 -v ON_ERROR_STOP=1)
+DROP INDEX
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+apply seconds: 0.6
+##### SHOW after 012
+            indexname             
+----------------------------------
+ trip_status_history_pkey
+ trip_status_history_trip_seq_idx
+(2 rows)
+
+ indexes_total 
+---------------
+            41
+(1 row)
+
+          proname           | definer |      owner      | public_may_execute | app_may_execute 
+----------------------------+---------+-----------------+--------------------+-----------------
+ add_support_note           | t       | ridehail_writer | f                  | t
+ payment_write_audit        | t       | ridehail_writer | f                  | f
+ provider_event_write_audit | t       | ridehail_writer | f                  | f
+ setting_write_audit        | t       | ridehail_writer | f                  | f
+ trip_write_history         | t       | ridehail_writer | f                  | f
+(5 rows)
+
+##### the same checks again on the real database, as ridehail_app, inside BEGIN ... ROLLBACK
+          proname           | app_may_execute | public_may_execute | owner_may_execute 
+----------------------------+-----------------+--------------------+-------------------
+ payment_write_audit        | f               | f                  | t
+ provider_event_write_audit | f               | f                  | t
+ setting_write_audit        | f               | f                  | t
+ trip_write_history         | f               | f                  | t
+(4 rows)
+
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ eeeeeeee-0000-0000-0000-000000000010 | arrived
+(1 row)
+
+UPDATE 1
+ has_seq | from_status | to_status | actor_role |           actor_driver_id            
+---------+-------------+-----------+------------+--------------------------------------
+ t       | assigned    | arrived   | driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ actor_role |    action     | entity_type |                details                 
+------------+---------------+-------------+----------------------------------------
+ provider   | status_change | payment     | {"to": "succeeded", "from": "pending"}
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+          key           | int_value 
+------------------------+-----------
+ cancellation_fee_minor |     56000
+(1 row)
+
+UPDATE 1
+ actor_role |     action     |                            details                            
+------------+----------------+---------------------------------------------------------------
+ support    | setting_change | {"to": 56000, "key": "cancellation_fee_minor", "from": 50000}
+(1 row)
+proof event left: 0

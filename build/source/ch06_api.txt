@@ -1,0 +1,191 @@
+# Chapter 6. API contracts
+@SRC Built from docs/06_api_contracts.md, docs/06b_error_catalogue.md and docs/06c_endpoint_matrix.md.
+
+## Conventions
+@P Contracts only: no code, no database change. A second engineer must be able to build every endpoint from the contract and the error catalogue without asking a question. Field names are the column names of 02_entities.md, statuses are those of 03_state_machine.md, and every endpoint cites requirement IDs from 01_requirements.md. CONFIRMED means the rule was run and the output kept; INFERRED means it was reasoned.
+### Format
+@P Base path /v1. Requests and responses are JSON, UTF-8, Content-Type application/json (otherwise 415). The body is at most 16 KiB (otherwise 413). Unknown body fields are rejected (422 validation_failed, the field is named): the caller must not be able to send rater_role, status, amount_minor or driver_id and have them used. Ids are uuids. Timestamps are RFC 3339 UTC with microseconds (2026-09-16T23:53:32.458283Z). Money is an integer number of kobo in a field ending _minor, with a currency field beside it, always "NGN" (B3); a number that is not an integer (for example 10.5) is rejected with 422, because the database would round it silently (10.5 became 11, CONFIRMED in 04 question 2), and one amount is at most 1,000,000,000 kobo. Coordinates are JSON numbers with at most 6 decimals (the columns are numeric(8,6) and numeric(9,6)); latitude is -90 to 90, longitude is -180 to 180. Lists use the envelope {"items": [...], "next_cursor": "..." or null} (section 1.9).
+### Who calls
+@P A bearer token (Authorization: Bearer <token>) gives the API a role and a subject id (sub, a uuid); the API trusts only these two values from the token.
+@TBL 9
+Caller | How it is identified | sub is
+rider | bearer token, role rider | rider.id
+driver | bearer token, role driver | driver.id
+support | bearer token, role support | support_admin.id
+provider | no token. HMAC signature of the body (section EP19) | none
+scheduler | internal process, no HTTP (section 5) | none
+@END
+@P A token of a person whose deleted_at is set, or of a support admin with is_active = false, is refused with 401 (INFERRED: the database does not check this).
+### Ownership checks
+@P Every endpoint that takes an id compares a column with sub, in the same SQL statement as the read or write (... WHERE id = $1 AND rider_id = $2), so there is no gap between the check and the use.
+@P A failed ownership check returns 404 not_found with the same body as an id that does not exist (never 403), so a stranger cannot learn that an id exists. A role that may never call an endpoint gets 403 forbidden_role. The ownership column for a driver is trip.driver_id; while a trip is requested it is NULL and equals no caller, so a driver cannot touch a trip it has not accepted.
+### Session settings the API sets for the database
+@P Every request runs in one database transaction on the role ridehail_app (never the dev superuser). The first statement of the transaction is:
+@CODE
+SELECT set_config('app.actor_role', $1, true), set_config('app.actor_id', $2, true);
+@END
+@P The value comes only from the authenticated caller: $1 is the token role (rider, driver, support) and $2 is sub; for the webhook it is provider and the empty string, for scheduled jobs system and the empty string, never from the request body, a header or a query string. The third argument is true (transaction-local), because with a connection pool the same database connection serves different callers and a session-level value would leak to the next caller. The database trusts the claim: it checks that the claimed actor may make the move and that the claimed id is the trip's own rider or driver, but it cannot prove who the caller is, which is the API's job.
+### The error body, and what never leaves the server
+@P The body is:
+@CODE
+{"error": {"code": "rider_has_active_trip", "message": "You already have a trip in progress.",
+           "request_id": "req_01J8...",
+           "details": {"current_status": "requested"}}}
+@END
+@B code is machine readable and comes from 06b_error_catalogue.md. message is a fixed plain-English sentence per code. details holds only safe, named fields.
+@B A 500 never carries a database message, because a Postgres message can contain ids and values (CONFIRMED). A 500 body has code: internal_error, the fixed message and the request_id, nothing else; the real error goes to the server log with the same request_id.
+@B Every response carries X-Request-Id. The caller may send its own (up to 64 characters); otherwise the API makes one.
+### How a database error becomes an HTTP status
+@P The database driver gives the API the SQLSTATE, the constraint name (for 23xxx errors) and the message. The API reads the SQLSTATE (and, for 23xxx, the constraint name) and never parses the message text, which is for the server log only. It maps in this order: 23505, 23503, 23514 (unique, foreign key, check) by the constraint name (for example trip_one_active_per_rider); RHnnn (a trigger or function RAISE EXCEPTION, migration 015) by the SQLSTATE alone, since every rule has its own code in the custom class RH and the table of 45 codes is in 06b section 3, while a SQLSTATE in class RH that is not in the table, and the old generic P0001, are internal_error plus an alert, never a guess; 55P03 (lock timeout) on the idempotency insert is request_in_progress, and 40001 or 40P01 (serialization or deadlock) retry the whole transaction once, then service_unavailable; 42501 (permission denied), 23502 (not null) and anything else are internal_error (a role or API bug). The API reads the SQLSTATE and the constraint name in exactly one place, a database error mapper that every request goes through, and nowhere else; the field name differs between drivers, so the mapper is the only code that must change when the driver is chosen.
+### Idempotency in this API
+@P Three mechanisms; each endpoint says which one it uses.
+@B (a) Keyed: the Idempotency-Key header. Only two rider actions use the table idempotency_key: POST /v1/trips (action request_trip) and POST /v1/trips/{trip_id}/payments (action pay_trip). Support refunds also take the header but cannot use the table (its rider_id is required), see EP21.
+@B (b) State-based replay for trip moves. accept, arrive, start, complete and cancel have no key; a repeated move by the caller who already made it returns 200 with the current trip and Idempotent-Replay: true, and anything else is 409.
+@B (c) Natural idempotency. Reads. Erasure (running it twice is harmless). Ratings are not keyed: a second rating by the same side is 409 already_rated. Location pings and support notes are not idempotent: a duplicate ping or note is harmless.
+@P For the keyed mechanism, the key is 1 to 128 printable ASCII characters without spaces, otherwise 400 invalid_idempotency_key. The unique constraint is idem_one_key_per_rider_action on (rider_id, action, key): a key is unique per rider and action, not global. The first statement after the settings inserts the key with expires_at = now + 24 hours. Only successful (2xx) responses are stored. Same key with a different body is 422 idempotency_key_reuse; the same key still running is 409 request_in_progress with Retry-After: 1.
+@P The three transactions of EP15 (the payment flow) show why a provider call must not hold a database lock:
+@CODE
+Flow (three transactions, because a provider call must not hold a database lock):
+1. Transaction 1: set the actor; INSERT INTO idempotency_key ... ON CONFLICT DO NOTHING
+   (action pay_trip, request_hash includes the trip_id); commit. Replay rules of 1.7a apply here.
+2. Call the provider to start the charge, passing our Idempotency-Key as the provider's own
+   idempotency key (assumption, decision 5). The provider returns a provider_reference.
+   Provider unreachable or refusing: delete the key row, 502 provider_error, no payment row exists.
+3. Transaction 2: set the actor; INSERT INTO payment (id, trip_id, purpose, amount_minor, currency,
+   provider_reference) (status pending); UPDATE idempotency_key SET response_status = 202,
+   response_body = ..., payment_id = ...; commit.
+@END
+
+## A worked endpoint
+@P EP02 POST /v1/trips is the worked endpoint because it shows the key, the transaction and the errors (rider app; A1, B0, B1, B6).
+@P Who and ownership: role rider. The trip's rider_id is sub. The quote must satisfy fare_quote.id = body.fare_quote_id AND fare_quote.rider_id = sub.
+@P Request: headers Authorization, Content-Type, Idempotency-Key (required). Body:
+@TBL 9
+Field | Type | Required | Limits
+fare_quote_id | uuid | yes | a quote of this rider that has not expired and has not started a trip
+pickup_address | string | yes | 1 to 300 characters, not blank
+dropoff_address | string | yes | 1 to 300 characters, not blank
+@END
+@P Flow (one transaction): set the actor; insert the idempotency row; read the quote with the ownership condition; INSERT INTO trip (id, rider_id, fare_quote_id, pickup_address, dropoff_address) (status defaults to requested; the trigger writes the history row (new) > requested); UPDATE idempotency_key SET response_status = 201, response_body = ..., trip_id = .... CONFIRMED in the walkthrough, evidence/api_walkthrough_tests.txt.
+@P Success: 201, header Location: /v1/trips/{id}, body Trip (rider view, status = requested). A replay returns the same 201 body with Idempotent-Replay: true.
+@P Errors:
+@TBL 9
+Status | Code | When | Database cause
+409 | rider_has_active_trip | the rider already has a trip in requested, assigned, arrived or started | unique index trip_one_active_per_rider, "duplicate key value violates unique constraint trip_one_active_per_rider" (E01)
+404 | quote_not_found | no quote with that id for this rider (unknown id, or another rider's quote) | ownership query; backstop FK trip_quote_belongs_to_rider, "insert or update on table trip violates foreign key constraint trip_quote_belongs_to_rider" (E02a, E02b)
+409 | quote_already_used | the quote already started a trip | unique trip_fare_quote_id_key (E03)
+422 | quote_expired | the quote's expires_at has passed | trigger trip_enforce_transition, SQLSTATE RH004 (message "fare quote % has expired", E04); the API also checks expires_at first
+400 | invalid_idempotency_key | header missing, empty, longer than 128, or has a space | backstop check idem_key_length (E32)
+422 | idempotency_key_reuse | the key was used with a different body | none: the stored request_hash differs
+409 | request_in_progress | the same key is still being processed | SQLSTATE 55P03 on the idempotency insert (concurrency test)
+422 | validation_failed | an address is blank or too long, fare_quote_id is not a uuid, a field is unknown | none
+@END
+@P Also: 401, 403, 429, 500, 503 (common). Order of checks: replay and key checks come first, so a retry with the same key never returns rider_has_active_trip (it replays the 201). A new key after a success does return it.
+@P Idempotency: keyed (section 1.7a), action request_trip. A retry cannot create a second trip: the stored answer is replayed, and even without it trip_one_active_per_rider and trip_fare_quote_id_key refuse a second trip. Session settings: rider, sub.
+
+## The list contract
+@P EP06 GET /v1/riders/me/trips (rider app; A3, U1, B8) is the worked list endpoint. The list is WHERE rider_id = sub; there is no rider_id parameter. Query parameters are limit, cursor, status, created_from and created_to.
+@P Sort: created_at descending, ties broken by id descending. Nothing else is offered. Reason: the indexes are trip_rider_history_idx (rider_id, created_at DESC, id DESC) and trip_driver_history_idx (driver_id, created_at DESC, id DESC). Any other sort needs a sort of all of a person's trips and breaks keyset paging.
+@P Keyset, not OFFSET. The query asks for limit + 1 rows; if the extra row exists there is a next page and next_cursor is built from the last item returned. Page size: limit default 20, minimum 1, maximum 100. Outside that range: 400 invalid_filter (the field limit is named).
+@P The cursor is opaque to the client. It is base64url(payload) + "." + base64url(signature). The payload is JSON {"v":1,"c":"<created_at of the last item>","i":"<id of the last item>","f":"<16 hex of SHA-256 of the caller and the filters>"}. The signature is HMAC-SHA256 of the payload with a server secret read from the environment. The API refuses a cursor when the signature does not verify, v is not 1, f differs from the current caller and filters, or c or i do not parse: 400 invalid_cursor. Binding f means a cursor cannot be moved to another caller or reused with other filters.
+@P Filters (rider and driver lists): status (one or more of requested, assigned, arrived, started, completed, cancelled, comma separated), created_from and created_to (RFC 3339; created_at >= created_from and created_at < created_to). Any other query parameter, an unknown status, a bad date, or created_from not before created_to: 400 invalid_filter. A page after the last returns {"items": [], "next_cursor": null} with 200.
+@P Worked example (real rows of rider 10000000-0000-0000-0000-000000000777, who has 40 trips; the signature is masked). The request is GET /v1/riders/me/trips?limit=3, and the first item with the cursor is:
+@CODE
+{"items": [
+  {"id": "40000000-0000-0000-0000-000000198904", "status": "completed", "pickup_address": "BULK pickup 198904", "dropoff_address": "BULK dropoff 198904", "driver_name_snapshot": "BULK Driver 217", "created_at": "2026-10-04T08:33:32.458283Z", "completed_at": "2026-10-06T18:11:00.519301Z", "cancelled_at": null, "fare_amount_minor": 108000, "fare_currency": "NGN", "cancellation_fee_minor": null, "cancellation_fee_currency": null}],
+ "next_cursor": "eyJ2IjoxLCJjIjoiMjAyNi0wOS0xNlQyMzo1MzozMi40NTgyODNaIiwiaSI6IjQwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDE4ODkwNCIsImYiOiJkMzdjMGVjNmRkNWQzM2RmIn0.****"}
+@END
+@P The cursor payload decodes to {"v":1,"c":"2026-09-16T23:53:32.458283Z","i":"40000000-0000-0000-0000-000000188904","f":"d37c0ec6dd5d33df"}. The database returned 4 rows for limit + 1, and the fourth (...183904) is why a next page exists (CONFIRMED, L2).
+@P EP07 GET /v1/drivers/me/trips (driver app; A3, U2, B8) is identical to EP06 with these differences: role driver; WHERE driver_id = sub; no driver_name_snapshot; index trip_driver_history_idx; the item has no cancellation_fee_minor and no cancellation_fee_currency. EP08 is a bounded list that always sends next_cursor: null, and EP04, EP18 and EP22 send no cursor because they are small.
+
+## The endpoint matrix
+@P The endpoint matrix is generated from the endpoint index by a script, so the two cannot disagree. Part 1 below is the endpoints against caller roles (Y = may call; the ownership check for each is in section 1.3 of the contract).
+@TBL 9
+Id | Method and path | rider | driver | support | provider | scheduler
+EP01 | POST /v1/fare-quotes | Y | - | - | - | -
+EP02 | POST /v1/trips | Y | - | - | - | -
+EP03 | GET /v1/trips/{trip_id} | Y | Y | Y | - | -
+EP04 | GET /v1/trips/{trip_id}/status-history | Y | Y | Y | - | -
+EP05 | GET /v1/trips/{trip_id}/driver-location | Y | - | Y | - | -
+EP06 | GET /v1/riders/me/trips | Y | - | - | - | -
+EP07 | GET /v1/drivers/me/trips | - | Y | - | - | -
+EP08 | GET /v1/trip-requests | - | Y | - | - | -
+EP09 | POST /v1/trips/{trip_id}/accept | - | Y | - | - | -
+EP10 | POST /v1/trips/{trip_id}/arrive | - | Y | - | - | -
+EP11 | POST /v1/trips/{trip_id}/start | - | Y | - | - | -
+EP12 | POST /v1/trips/{trip_id}/complete | - | Y | - | - | -
+EP13 | POST /v1/trips/{trip_id}/locations | - | Y | - | - | -
+EP14 | POST /v1/trips/{trip_id}/cancel | Y | Y | Y | - | -
+EP15 | POST /v1/trips/{trip_id}/payments | Y | - | - | - | -
+EP16 | GET /v1/payments/{payment_id} | Y | - | Y | - | -
+EP17 | POST /v1/trips/{trip_id}/ratings | Y | Y | - | - | -
+EP18 | GET /v1/trips/{trip_id}/ratings | Y | Y | Y | - | -
+EP19 | POST /v1/provider/webhooks | - | - | - | Y | -
+EP20 | POST /v1/support/payments/{payment_id}/fail | - | - | Y | - | -
+EP21 | POST /v1/support/payments/{payment_id}/refunds | - | - | Y | - | -
+EP22 | GET /v1/support/settings | - | - | Y | - | -
+EP23 | PUT /v1/support/settings/{key} | - | - | Y | - | -
+EP24 | POST /v1/support/notes | - | - | Y | - | -
+EP25 | POST /v1/support/riders/{rider_id}/erasure | - | - | Y | - | -
+EP26 | POST /v1/support/drivers/{driver_id}/erasure | - | - | Y | - | -
+EP27 | GET /v1/trips/{trip_id}/events | Y | - | Y | - | -
+JB1 | request timeout job (internal) | - | - | - | - | Y
+JB2 | payment reconciliation job (internal) | - | - | - | - | Y
+JB3 | idempotency cleanup job (internal) | - | - | - | - | Y
+@END
+@P The endpoint index gives every endpoint with what it does and its requirement IDs:
+@TBL 9
+Id | Method and path | What it does
+EP01 | POST /v1/fare-quotes | request a fare quote (A1, B3, Q1)
+EP02 | POST /v1/trips | request a trip (A1, B0, B1, B6)
+EP03 | GET /v1/trips/{trip_id} | read one trip (A3, B4, U1, U2, U3)
+EP04 | GET /v1/trips/{trip_id}/status-history | read the trip's status history (A3, B5, U3)
+EP05 | GET /v1/trips/{trip_id}/driver-location | read the driver's latest position (A3, B8)
+EP06 | GET /v1/riders/me/trips | list the rider's own trips (A3, U1, B8)
+EP07 | GET /v1/drivers/me/trips | list the driver's own trips (A3, U2, B8)
+EP08 | GET /v1/trip-requests | list open trip requests near the driver (A2, U2)
+EP09 | POST /v1/trips/{trip_id}/accept | accept a trip (A2, B2, U2)
+EP10 | POST /v1/trips/{trip_id}/arrive | mark the driver arrived (A3, B5)
+EP11 | POST /v1/trips/{trip_id}/start | start the trip (A3, B5)
+EP12 | POST /v1/trips/{trip_id}/complete | complete the trip and set the fare (A3, B3, B4)
+EP13 | POST /v1/trips/{trip_id}/locations | record a location ping (A3, B8)
+EP14 | POST /v1/trips/{trip_id}/cancel | cancel the trip (B9, B1, B2, B5, Q2, U3)
+EP15 | POST /v1/trips/{trip_id}/payments | start a payment (A4, B3, B6, U1)
+EP16 | GET /v1/payments/{payment_id} | read one payment (A4, U3)
+EP17 | POST /v1/trips/{trip_id}/ratings | rate the trip (A5, B7, Q3)
+EP18 | GET /v1/trips/{trip_id}/ratings | read the trip's ratings (A5, B7)
+EP19 | POST /v1/provider/webhooks | receive a provider webhook (A4, B5, B6, U4)
+EP20 | POST /v1/support/payments/{payment_id}/fail | support marks a payment failed (A4, B6, U3, U4)
+EP21 | POST /v1/support/payments/{payment_id}/refunds | support refunds a payment (B10, B3, B4, U3, Q4)
+EP22 | GET /v1/support/settings | list the settings (B9, U3)
+EP23 | PUT /v1/support/settings/{key} | set one setting (B3, B7, B9, U3, Q1, Q2, Q3)
+EP24 | POST /v1/support/notes | add a support note (B5, U3)
+EP25 | POST /v1/support/riders/{rider_id}/erasure | erase a rider (B8, U3)
+EP26 | POST /v1/support/drivers/{driver_id}/erasure | erase a driver (B8, U3)
+EP27 | GET /v1/trips/{trip_id}/events | stream one trip's events (A3, B8, U1, U3)
+JB1 | request timeout job (internal) | cancel stale requested trips (B9, B1)
+JB2 | payment reconciliation job (internal) | reconcile pending payments (A4, B6, U4)
+JB3 | idempotency cleanup job (internal) | delete expired idempotency keys (B6)
+@END
+@P Two requirement IDs have no endpoint: Q5 Location retention (no retention period is chosen, blocked on legal advice) and Q6 Driver never arrives (an open owner decision; EP14 applies the current rule and says so). No endpoint has no requirement ID.
+
+## The error catalogue
+@P The body is always {"error": {"code", "message", "request_id", "details"}}. The mapping uses the SQLSTATE only: by constraint name for 23xxx, by the RHnnn code for every trigger and function rule. A SQLSTATE not in this catalogue, including the old generic P0001, is internal_error plus an alert, never a guess. Retryable means the same request may be repeated unchanged and can succeed later.
+@P The 12 most important codes:
+@TBL 9
+Code | HTTP | Meaning
+rider_has_active_trip | 409 | rider already has a requested, assigned, arrived or started trip
+quote_expired | 422 | the quote's expires_at has passed
+illegal_transition | 409 | the move is not allowed from the trip's current status for this actor
+trip_finished | 409 | the trip is completed or cancelled
+payment_already_exists | 409 | a pending or succeeded payment already exists for this trip and purpose
+refund_exceeds_payment | 409 | refunds would exceed the payment amount (B10)
+already_rated | 409 | this side already rated the trip
+idempotency_key_reuse | 422 | same key with a different body
+request_in_progress | 409 | the same idempotency key is still being processed
+invalid_cursor | 400 | cursor signature, version, filter fingerprint or fields invalid; or a Last-Event-ID / last_seq (EP27) that is not a whole number of 0 or more
+rate_limited | 429 | too many requests
+internal_error | 500 | any unexpected error, including every RH code marked internal_error in section 3
+@END
+@P The other 33 codes, and the full table of the 45 SQLSTATE codes of the custom class RH from migration 015, are in docs/06b_error_catalogue.md sections 1 and 3 and are referenced in the appendix.
+@P The full text of each of the 27 endpoints stays in docs/06_api_contracts.md section 4 and the three internal jobs JB1 to JB3 likewise in section 5.

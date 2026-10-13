@@ -1,0 +1,51 @@
+=== index present at the start?
+ payment_trip_id_idx_exists 
+----------------------------
+                          1
+(1 row)
+
+=== round 1, WITH the index
+BEGIN
+SET
+NOTICE:  WITH index, round 1: 0.676 ms per insert (300 inserts, 00:00:00.203871)
+DO
+ROLLBACK
+=== round 1, WITHOUT the index
+BEGIN
+DROP INDEX
+SET
+NOTICE:  WITHOUT index, round 1: 1.297 ms per insert (300 inserts, 00:00:00.389058)
+DO
+ROLLBACK
+=== round 2, WITH the index
+BEGIN
+SET
+NOTICE:  WITH index, round 2: 0.533 ms per insert (300 inserts, 00:00:00.15997)
+DO
+ROLLBACK
+=== round 2, WITHOUT the index
+BEGIN
+DROP INDEX
+SET
+NOTICE:  WITHOUT index, round 2: 0.336 ms per insert (300 inserts, 00:00:00.100824)
+DO
+ROLLBACK
+=== round 3, WITH the index
+BEGIN
+SET
+NOTICE:  WITH index, round 3: 0.260 ms per insert (300 inserts, 00:00:00.078135)
+DO
+ROLLBACK
+=== round 3, WITHOUT the index
+BEGIN
+DROP INDEX
+SET
+NOTICE:  WITHOUT index, round 3: 0.231 ms per insert (300 inserts, 00:00:00.069297)
+DO
+ROLLBACK
+=== after all rounds: index still exists, no payment left behind
+ payment_trip_id_idx_exists | payment_rows | pair_rows_left 
+----------------------------+--------------+----------------
+                          1 |       169410 |              0
+(1 row)
+

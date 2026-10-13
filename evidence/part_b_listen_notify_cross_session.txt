@@ -1,0 +1,18 @@
+SET
+      cu      | listener_backend_pid 
+--------------+----------------------
+ ridehail_app |                  266
+(1 row)
+
+LISTEN
+ pg_sleep 
+----------
+ 
+(1 row)
+
+Asynchronous notification "rh_test6" with payload "{"trip_id":"40000000-0000-0000-0000-000000198904","seq":930301}" received from server process with PID 273.
+ listener_next_command 
+-----------------------
+                     1
+(1 row)
+

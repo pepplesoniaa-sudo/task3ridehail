@@ -1,0 +1,51 @@
+##### BEFORE the seed (state of the setting table, then EP01 proof)
+BEGIN
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+=== Q1 the settings read of EP01: missing = 0 means service_not_configured does not trigger
+ found | missing |        ep01_outcome        
+-------+---------+----------------------------
+     0 |       8 | 503 service_not_configured
+(1 row)
+
+=== Q2 which required keys are missing (empty list = none)
+       missing_key       
+-------------------------
+ base_fare_minor
+ per_km_minor
+ per_minute_minor
+ quote_validity_seconds
+ service_area_min_lat_e6
+ service_area_max_lat_e6
+ service_area_min_lon_e6
+ service_area_max_lon_e6
+(8 rows)
+
+=== Q3 inside the box: pickup 6.45,3.39 dropoff 6.50,3.35 -> quote created (rolled back)
+ id | estimated_distance_m | estimated_duration_s | amount_minor | currency | valid_for 
+----+----------------------+----------------------+--------------+----------+-----------
+(0 rows)
+
+INSERT 0 0
+=== Q4 outside the box: pickup 9.05,7.49 (Abuja) -> the box test is false, EP01 answers 422 outside_service_area (no quote)
+ pickup_inside_box 
+-------------------
+ 
+(1 row)
+
+ROLLBACK
+=== after ROLLBACK: the quote is gone
+ quotes_with_test_id 
+---------------------
+                   0
+(1 row)
+

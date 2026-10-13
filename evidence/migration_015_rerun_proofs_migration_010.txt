@@ -1,0 +1,395 @@
+################ PART 0: how the existing rows were numbered (read only, as ridehail_app)
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+--- 0a rows, trips with several history rows, and how many of those trips have ALL their rows at one created_at
+ history_rows | trips_with_several_rows | trips_whose_rows_all_tie_on_created_at 
+--------------+-------------------------+----------------------------------------
+       932072 |                  199611 |                                 199611
+(1 row)
+
+--- 0b chain check: ordered by seq, each trip's first row has no from_status and each next row starts where the previous one ended. Expect 0 violations
+ chain_violations_by_seq 
+-------------------------
+                     126
+(1 row)
+
+--- 0b2 the same chain check for the 12 small-set trips only (the trips the proofs and the demonstrations use)
+ small_set_chain_violations_by_seq 
+-----------------------------------
+                                 0
+(1 row)
+
+--- 0c the same check ordered by created_at then id (what the old query would have given). Expect many violations, because the ties are broken by random uuids
+ chain_violations_by_created_at_then_id 
+----------------------------------------
+                                 732384
+(1 row)
+
+--- 0d seq is unique and strictly increasing with insert order inside each trip of the small set
+ trip |                                            timeline_by_seq                                             
+------+--------------------------------------------------------------------------------------------------------
+ 01   | 1:new>requested  2:requested>assigned  3:assigned>arrived  4:arrived>started  5:started>completed
+ 08   | 27:new>requested  28:requested>assigned  29:assigned>arrived  30:arrived>started  31:started>cancelled
+(2 rows)
+
+RESET
+################ F1: direct INSERT into trip_status_history is refused by privilege
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  permission denied for table trip_status_history
+ROLLBACK
+################ F2: direct INSERT into audit_log is refused by privilege
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ERROR:  permission denied for table audit_log
+ROLLBACK
+################ F3: a normal trip move still writes its history row, with the claimed actor (driver 3 moves trip 10, small set)
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ history_rows_before 
+---------------------
+                   2
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ eeeeeeee-0000-0000-0000-000000000010 | arrived
+(1 row)
+
+UPDATE 1
+ history_rows_after 
+--------------------
+                  3
+(1 row)
+
+  seq   | from_status | to_status | actor_role |           actor_driver_id            | matches_claimed_actor 
+--------+-------------+-----------+------------+--------------------------------------+-----------------------
+ 932210 | assigned    | arrived   | driver     | bbbbbbbb-0000-0000-0000-000000000003 | t
+(1 row)
+
+ROLLBACK
+################ F3b + H: every kind of actor is recorded right, and the timeline order is stable when several moves share one created_at
+################ (one transaction: trip 1 by rider 2000 and driver 400, trip 2 cancelled by the system, trip 3 cancelled by support)
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000002000
+(1 row)
+
+INSERT 0 3
+INSERT 0 1
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | 20000000-0000-0000-0000-000000000400
+(1 row)
+
+UPDATE 1
+UPDATE 1
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000002000
+(1 row)
+
+UPDATE 1
+INSERT 0 1
+ set_config | set_config 
+------------+------------
+ system     | 
+(1 row)
+
+UPDATE 1
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000002000
+(1 row)
+
+INSERT 0 1
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+UPDATE 1
+--- every history row of the three trips: the actor columns match the claimed actor
+ trip |  seq   |         move          | actor_role | rider | driver | admin 
+------+--------+-----------------------+------------+-------+--------+-------
+ 1    | 932211 | (new) > requested     | rider      | 2000  |        | 
+ 1    | 932212 | requested > assigned  | driver     |       | 0400   | 
+ 1    | 932213 | assigned > arrived    | driver     |       | 0400   | 
+ 1    | 932214 | arrived > cancelled   | rider      | 2000  |        | 
+ 2    | 932215 | (new) > requested     | rider      | 2000  |        | 
+ 2    | 932216 | requested > cancelled | system     |       |        | 
+ 3    | 932217 | (new) > requested     | rider      | 2000  |        | 
+ 3    | 932218 | requested > cancelled | support    |       |        | 0001
+(8 rows)
+
+--- H: trip 1, all four rows share ONE created_at
+ rows | distinct_created_at 
+------+---------------------
+    4 |                   1
+(1 row)
+
+--- H: the old order (created_at, then id as tie-break): the chain is scrambled
+         move         
+----------------------
+ requested > assigned
+ (new) > requested
+ arrived > cancelled
+ assigned > arrived
+(4 rows)
+
+--- H: the new order (seq): the chain is correct and stable
+  seq   |         move         
+--------+----------------------
+ 932211 | (new) > requested
+ 932212 | requested > assigned
+ 932213 | assigned > arrived
+ 932214 | arrived > cancelled
+(4 rows)
+
+--- A3.3 timeline query rewritten to ORDER BY seq, on the same trip (index trip_status_history_trip_seq_idx)
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Index Scan using trip_status_history_trip_seq_idx on trip_status_history
+   Index Cond: (trip_id = '90000000-0000-0000-0000-000000000001'::uuid)
+(2 rows)
+
+ROLLBACK
+################ F4: a refused move writes nothing (driver 4 tries to move driver 3's trip 10)
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000004
+(1 row)
+
+SAVEPOINT
+ERROR:  actor is not this trip's driver (F9)
+CONTEXT:  PL/pgSQL function trip_enforce_transition() line 57 at RAISE
+ROLLBACK
+ history_rows_after | history_rows_before 
+--------------------+---------------------
+                  2 |                   2
+(1 row)
+
+ROLLBACK
+################ F5: a payment status change still writes its audit row (provider succeeds pending payment PRV-T03-A)
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ audit_rows_for_payment_before 
+-------------------------------
+                             0
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ actor_role |    action     | entity_type |                details                 
+------------+---------------+-------------+----------------------------------------
+ provider   | status_change | payment     | {"to": "succeeded", "from": "pending"}
+(1 row)
+
+ROLLBACK
+################ F6: a setting change by support still writes its audit row; a change by anyone else is refused
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+          key           | int_value 
+------------------------+-----------
+ cancellation_fee_minor |     55000
+(1 row)
+
+UPDATE 1
+ setting_audit_rows_before | setting_audit_rows_after 
+---------------------------+--------------------------
+                         4 |                        5
+(1 row)
+
+ actor_role | admin |     action     | entity_type | entity_id |                            details                            
+------------+-------+----------------+-------------+-----------+---------------------------------------------------------------
+ support    | 0001  | setting_change | setting     |           | {"to": 55000, "key": "cancellation_fee_minor", "from": 50000}
+(1 row)
+
+ROLLBACK
+--- F6b: the same change claimed by a rider
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  only a support actor may change a setting (actor rider / aaaaaaaa-0000-0000-0000-000000000001)
+CONTEXT:  PL/pgSQL function setting_write_audit() line 7 at RAISE
+ROLLBACK
+################ F7: P3 and provider_conflict audit rows still appear (stuck payment PRV-T03-A)
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+INSERT 0 1
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ provider_reference | status 
+--------------------+--------
+ PRV-T03-A          | failed
+(1 row)
+
+UPDATE 1
+ actor_role | admin |      action       | entity_type |                                                    details                                                    
+------------+-------+-------------------+-------------+---------------------------------------------------------------------------------------------------------------
+ provider   |       | provider_conflict | payment     | {"event_type": "payment_not_found", "provider_event_id": "evt-nf-t03-m10", "provider_reference": "PRV-T03-A"}
+ support    | 0001  | status_change     | payment     | {"to": "failed", "from": "pending"}
+(2 rows)
+
+ROLLBACK
+################ F7b: provider_conflict for a reference nobody knows (entity_type provider_event)
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+INSERT 0 1
+ actor_role |      action       |  entity_type   |                                                      details                                                      
+------------+-------------------+----------------+-------------------------------------------------------------------------------------------------------------------
+ provider   | provider_conflict | provider_event | {"event_type": "payment_not_found", "provider_event_id": "evt-nf-nobody-m10", "provider_reference": "PRV-NOBODY"}
+(1 row)
+
+ROLLBACK
+################ F8: support notes go through add_support_note only
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000002
+(1 row)
+
+ note_written 
+--------------
+ t
+(1 row)
+
+ actor_role | admin |    action    | entity_type | trip |                              note                               
+------------+-------+--------------+-------------+------+-----------------------------------------------------------------
+ support    | 0002  | dispute_note | trip        | 01   | Rider disputes the route. Refund of 50000 kobo agreed by phone.
+(1 row)
+
+ROLLBACK
+--- F8b: the same call claimed by a rider
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000001
+(1 row)
+
+ERROR:  only a support actor may write a support note (actor rider / aaaaaaaa-0000-0000-0000-000000000001)
+CONTEXT:  PL/pgSQL function add_support_note(text,uuid,text) line 8 at RAISE
+ROLLBACK
+--- F8c: a role with no grant cannot call it either (role created and rolled back inside the transaction)
+BEGIN
+CREATE ROLE
+SET
+      current_user      | session_user 
+------------------------+--------------
+ ridehail_proof_nogrant | ridehail
+(1 row)
+
+ERROR:  permission denied for function add_support_note
+ROLLBACK
+################ nothing left behind
+ proof_roles_left | history_rows | proof_history_rows_left | audit_rows | notes_left | proof_trips_left 
+------------------+--------------+-------------------------+------------+------------+------------------
+                0 |       932072 |                       0 |     169016 |          0 |                0
+(1 row)
+

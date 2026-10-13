@@ -1,0 +1,20 @@
+##### APPLY migration 016 (psql --single-transaction -v ON_ERROR_STOP=1)
+CREATE INDEX
+exit=0
+##### ANALYZE payment (separate statement, after the migration)
+ANALYZE
+ indexes_now 
+-------------
+          42
+(1 row)
+
+      indexname      |                                 indexdef                                 
+---------------------+--------------------------------------------------------------------------
+ payment_trip_id_idx | CREATE INDEX payment_trip_id_idx ON public.payment USING btree (trip_id)
+(1 row)
+
+  owner   | pg_size_pretty 
+----------+----------------
+ ridehail | 5248 kB
+(1 row)
+

@@ -1,0 +1,28 @@
+78,90c78,90
+<  add_support_note         |                2 |        0
+<  append_only_guard        |                1 |        0
+<  erase_driver             |                2 |        0
+<  erase_rider              |                2 |        0
+<  payment_enforce_rules    |               12 |        0
+<  ping_enforce_trip_status |                1 |        0
+<  provider_event_guard     |                3 |        0
+<  rating_block_change      |                1 |        0
+<  rating_enforce_rules     |                5 |        0
+<  refund_enforce_total     |                3 |        0
+<  setting_write_audit      |                1 |        0
+<  trip_block_delete        |                1 |        0
+<  trip_enforce_transition  |               15 |        0
+---
+>  add_support_note         |                2 |        2
+>  append_only_guard        |                1 |        1
+>  erase_driver             |                2 |        2
+>  erase_rider              |                2 |        2
+>  payment_enforce_rules    |               12 |       12
+>  ping_enforce_trip_status |                1 |        1
+>  provider_event_guard     |                3 |        3
+>  rating_block_change      |                1 |        1
+>  rating_enforce_rules     |                5 |        5
+>  refund_enforce_total     |                3 |        3
+>  setting_write_audit      |                1 |        1
+>  trip_block_delete        |                1 |        1
+>  trip_enforce_transition  |               15 |       15

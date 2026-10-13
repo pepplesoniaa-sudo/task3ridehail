@@ -1,0 +1,61 @@
+﻿test   before_sqlstate   after_sqlstate   message_same  message (after)
+E01    23505            23505            True   duplicate key value violates unique constraint "trip_one_active_per_rider"
+E02a   23503            23503            True   insert or update on table "trip" violates foreign key constraint "trip_quote_belongs_to_rider"
+E02b   23503            23503            True   insert or update on table "trip" violates foreign key constraint "trip_quote_belongs_to_rider"
+E03    23505            23505            True   duplicate key value violates unique constraint "trip_fare_quote_id_key"
+E04    P0001            RH004            True   fare quote ffffffff-0000-0000-0000-0000000000d4 has expired
+E05    P0001            RH008            True   illegal transition requested -> started by driver
+E05b   P0001            RH008            True   illegal transition started -> cancelled by rider
+E06    P0001            RH005            True   trip is completed (terminal): only updated_at may change (B4)
+E07                                      True   System.Object[]
+E08    23505            23505            True   duplicate key value violates unique constraint "trip_one_active_per_driver"
+E09    23503            23503            True   insert or update on table "trip" violates foreign key constraint "trip_vehicle_belongs_to_driver"
+E10    P0001            RH030            True   a location ping needs a trip that is assigned, arrived or started (status is completed)
+E11    23514,23514      23514,23514      True   new row for relation "location_ping" violates check constraint "ping_latitude_range"
+E12    23505            23505            True   duplicate key value violates unique constraint "payment_one_live_per_purpose"
+E13    P0001            RH022            True   a fare payment needs a completed trip (status is started)
+E14    P0001            RH024            True   a cancellation fee payment needs a cancelled trip with a fee above 0
+E15    P0001            RH023            True   payment amount 1 does not equal the trip fare 150000
+E16    P0001            RH026            True   payment is succeeded (terminal): only updated_at may change
+E17    P0001            RH028            True   support may fail a pending payment only after a payment_not_found event for this reference, received after the payment was created and not superseded by a later event (P3)
+E18    P0001            RH027            True   illegal payment transition pending -> succeeded by support
+E19    P0001            RH052            True   refunds 50000 + 250000 would exceed the payment amount 250000 (B10)
+E20    P0001            RH050            True   a refund needs a succeeded payment (status is pending)
+E21    23505            23505            True   duplicate key value violates unique constraint "refund_provider_reference_key"
+E22    23505            23505            True   duplicate key value violates unique constraint "rating_one_per_role_per_trip"
+E23    P0001            RH041            True   a rating needs a completed trip (status is started) (B7)
+E24    P0001            RH043            True   the rating window of 0 days has passed (B7)
+E25a   23514            23514            True   new row for relation "rating" violates check constraint "rating_stars_range"
+E25b   23514            23514            True   new row for relation "rating" violates check constraint "rating_comment_length"
+E26    P0001            RH071            True   rider aaaaaaaa-0000-0000-0000-000000000002 has an active trip: cannot erase (B8)
+E26b   P0001            RH071            True   driver bbbbbbbb-0000-0000-0000-000000000003 has an active trip: cannot erase (B8)
+E27    P0001            RH070            True   rider 00000000-0000-0000-0000-0000000000ff does not exist
+E28a   23514            23514            True   new row for relation "setting" violates check constraint "setting_value_not_negative"
+E28b   23514            23514            True   new row for relation "setting" violates check constraint "setting_money_has_currency"
+E28c   23514            23514            True   new row for relation "setting" violates check constraint "setting_currency_ngn"
+E28d                                     True   System.Object[]
+E29    P0001            RH060            True   only a support actor may change a setting (actor rider / aaaaaaaa-0000-0000-0000-000000000001)
+E30a   P0001            RH062            True   a support note cannot be empty
+E30b   23514            23514            True   new row for relation "audit_log" violates check constraint "audit_entity_type_valid"
+E30c   23514            23514            True   new row for relation "audit_log" violates check constraint "audit_entity_id_matches_type"
+E30d   P0001            RH061            True   only a support actor may write a support note (actor rider / aaaaaaaa-0000-0000-0000-000000000001)
+E30e                                     True   System.Object[]
+E31a   23505            23505            True   duplicate key value violates unique constraint "idem_one_key_per_rider_action"
+E31b                                     True   System.Object[]
+E31c                                     True   System.Object[]
+E31d                                     True   System.Object[]
+E32a   23514,23514,23514 23514,23514,23514 True   new row for relation "idempotency_key" violates check constraint "idem_key_length"
+E33a   23505            23505            True   duplicate key value violates unique constraint "provider_event_provider_event_id_key"
+E33b                                     True   System.Object[]
+E33c   23514            23514            True   new row for relation "provider_event" violates check constraint "provider_event_type_valid"
+E33d   23514            23514            True   new row for relation "provider_event" violates check constraint "provider_event_money_pair"
+E33e                                     True   System.Object[]
+E34    P0001            RH032            True   provider_event is already processed: it cannot change
+E36    42501            42501            True   permission denied for table trip_status_history
+E37    P0001            RH001            True   only the rider may request a trip (actor rider / 10000000-0000-0000-0000-000000003001)
+E38    P0001            RH010            True   actor is not this trip's driver (F9)
+E39    P0001            RH006            True   driver_id cannot change once set (F10)
+E40    P0001            RH012            True   a vehicle is required to assign a trip
+E41    P0001            RH015            True   these columns may not change in this move: {status,updated_at,pickup_address}
+E42    23514            23514            True   new row for relation "trip" violates check constraint "trip_completed_has_facts"
+E43                                      True   System.Object[]

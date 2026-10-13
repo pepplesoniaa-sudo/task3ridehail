@@ -1,0 +1,26 @@
+##### DRY RUN 011 (BEGIN ... ROLLBACK) with the failing call repeated as ridehail_app
+(1 row)
+
+ note_written 
+--------------
+ t
+(1 row)
+
+RESET
+      owner      | security_definer |               config               
+-----------------+------------------+------------------------------------
+ ridehail_writer | t                | {"search_path=pg_catalog, public"}
+(1 row)
+
+ROLLBACK
+##### APPLY 011 (psql -1 -v ON_ERROR_STOP=1)
+CREATE FUNCTION
+##### SHOW after 011
+     proname      |      owner      | security_definer |               config               | app_may_call | public_may_call 
+------------------+-----------------+------------------+------------------------------------+--------------+-----------------
+ add_support_note | ridehail_writer | t                | {"search_path=pg_catalog, public"} | t            | f
+(1 row)
+
+functions in public: 18
+audit_log rows: 169016
+trip_status_history rows: 932072

@@ -1,0 +1,48 @@
+##### CONCURRENCY TEST: a second request with the same idempotency key while the first is still running (both sessions as ridehail_app, nothing kept)
+--- session A: BEGIN; INSERT the key (not committed); hold 6 seconds; ROLLBACK
+--- session B at +2 s: the same rider, action and key, lock_timeout = 800 ms (what the API sets for the idempotency insert)
+BEGIN
+SET
+ session_b_is 
+--------------
+ ridehail_app
+(1 row)
+
+SET
+ERROR:  canceling statement due to lock timeout
+CONTEXT:  while inserting index tuple (1093,9) in relation "idempotency_key"
+SQLSTATE 55P03
+ROLLBACK
+session B waited about 1.4 seconds before the error
+--- session B again, with NO lock_timeout, started at +3 s: it waits for session A to finish (A rolls back at about +6 s), then its insert goes through
+BEGIN
+SET
+ session_c_is 
+--------------
+ ridehail_app
+(1 row)
+
+    key     
+------------
+ race-key-1
+(1 row)
+
+INSERT 0 1
+ROLLBACK
+session C waited about 3.1 seconds, and its insert returned a row because session A had rolled back
+--- session A's own output
+ session_a_is 
+--------------
+ ridehail_app
+(1 row)
+    key     
+------------
+ race-key-1
+(1 row)
+INSERT 0 1
+ pg_sleep 
+----------
+ 
+(1 row)
+--- nothing left behind:
+race-key rows: 0

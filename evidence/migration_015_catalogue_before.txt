@@ -1,0 +1,105 @@
+          proname           |                       args                        |         owner          | definer |                settings                 |                                           acl                                           | provolatile | proleakproof | proisstrict | proparallel | lanname | returns 
+----------------------------+---------------------------------------------------+------------------------+---------+-----------------------------------------+-----------------------------------------------------------------------------------------+-------------+--------------+-------------+-------------+---------+---------
+ add_support_note           | p_entity_type text, p_entity_id uuid, p_note text | ridehail_writer        | t       | search_path=pg_catalog, public, pg_temp | {ridehail_writer=X/ridehail_writer,ridehail_app=X/ridehail_writer}                      | v           | f            | f           | u           | plpgsql | uuid
+ append_only_guard          |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ erase_driver               | p_driver uuid                                     | ridehail_erasure_owner | t       | search_path=pg_catalog, public, pg_temp | {ridehail_erasure_owner=X/ridehail_erasure_owner,ridehail_app=X/ridehail_erasure_owner} | v           | f            | f           | u           | plpgsql | void
+ erase_rider                | p_rider uuid                                      | ridehail_erasure_owner | t       | search_path=pg_catalog, public, pg_temp | {ridehail_erasure_owner=X/ridehail_erasure_owner,ridehail_app=X/ridehail_erasure_owner} | v           | f            | f           | u           | plpgsql | void
+ payment_enforce_rules      |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ payment_write_audit        |                                                   | ridehail_writer        | t       | search_path=pg_catalog, public, pg_temp | {ridehail_writer=X/ridehail_writer}                                                     | v           | f            | f           | u           | plpgsql | trigger
+ ping_enforce_trip_status   |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ provider_event_guard       |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ provider_event_write_audit |                                                   | ridehail_writer        | t       | search_path=pg_catalog, public, pg_temp | {ridehail_writer=X/ridehail_writer}                                                     | v           | f            | f           | u           | plpgsql | trigger
+ rating_block_change        |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ rating_enforce_rules       |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ rating_update_cache        |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ refund_enforce_total       |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ set_updated_at             |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ setting_write_audit        |                                                   | ridehail_writer        | t       | search_path=pg_catalog, public, pg_temp | {ridehail_writer=X/ridehail_writer}                                                     | v           | f            | f           | u           | plpgsql | trigger
+ trip_block_delete          |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ trip_enforce_transition    |                                                   | ridehail               | f       | search_path=pg_catalog, public, pg_temp | (default)                                                                               | v           | f            | f           | u           | plpgsql | trigger
+ trip_write_history         |                                                   | ridehail_writer        | t       | search_path=pg_catalog, public, pg_temp | {ridehail_writer=X/ridehail_writer}                                                     | v           | f            | f           | u           | plpgsql | trigger
+(18 rows)
+
+         tbl         |           tgname           | tgenabled |                                                                         def                                                                          
+---------------------+----------------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------
+ audit_log           | append_only_guard          | O         | CREATE TRIGGER append_only_guard BEFORE DELETE OR UPDATE ON public.audit_log FOR EACH ROW EXECUTE FUNCTION append_only_guard()
+ driver              | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.driver FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+ fare_quote          | append_only_guard          | O         | CREATE TRIGGER append_only_guard BEFORE DELETE OR UPDATE ON public.fare_quote FOR EACH ROW EXECUTE FUNCTION append_only_guard()
+ idempotency_key     | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.idempotency_key FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+ location_ping       | append_only_guard          | O         | CREATE TRIGGER append_only_guard BEFORE UPDATE ON public.location_ping FOR EACH ROW EXECUTE FUNCTION append_only_guard()
+ location_ping       | ping_enforce_trip_status   | O         | CREATE TRIGGER ping_enforce_trip_status BEFORE INSERT ON public.location_ping FOR EACH ROW EXECUTE FUNCTION ping_enforce_trip_status()
+ payment             | payment_enforce_rules      | O         | CREATE TRIGGER payment_enforce_rules BEFORE INSERT OR UPDATE ON public.payment FOR EACH ROW EXECUTE FUNCTION payment_enforce_rules()
+ payment             | payment_write_audit        | O         | CREATE TRIGGER payment_write_audit AFTER UPDATE ON public.payment FOR EACH ROW EXECUTE FUNCTION payment_write_audit()
+ payment             | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.payment FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+ provider_event      | provider_event_guard       | O         | CREATE TRIGGER provider_event_guard BEFORE DELETE OR UPDATE ON public.provider_event FOR EACH ROW EXECUTE FUNCTION provider_event_guard()
+ provider_event      | provider_event_write_audit | O         | CREATE TRIGGER provider_event_write_audit AFTER INSERT OR UPDATE ON public.provider_event FOR EACH ROW EXECUTE FUNCTION provider_event_write_audit()
+ provider_event      | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.provider_event FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+ rating              | rating_block_change        | O         | CREATE TRIGGER rating_block_change BEFORE DELETE OR UPDATE ON public.rating FOR EACH ROW EXECUTE FUNCTION rating_block_change()
+ rating              | rating_enforce_rules       | O         | CREATE TRIGGER rating_enforce_rules BEFORE INSERT ON public.rating FOR EACH ROW EXECUTE FUNCTION rating_enforce_rules()
+ rating              | rating_update_cache        | O         | CREATE TRIGGER rating_update_cache AFTER INSERT ON public.rating FOR EACH ROW EXECUTE FUNCTION rating_update_cache()
+ refund              | append_only_guard          | O         | CREATE TRIGGER append_only_guard BEFORE DELETE OR UPDATE ON public.refund FOR EACH ROW EXECUTE FUNCTION append_only_guard()
+ refund              | refund_enforce_total       | O         | CREATE TRIGGER refund_enforce_total BEFORE INSERT ON public.refund FOR EACH ROW EXECUTE FUNCTION refund_enforce_total()
+ rider               | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.rider FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+ setting             | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.setting FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+ setting             | setting_write_audit        | O         | CREATE TRIGGER setting_write_audit AFTER INSERT OR UPDATE ON public.setting FOR EACH ROW EXECUTE FUNCTION setting_write_audit()
+ support_admin       | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.support_admin FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+ trip                | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.trip FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+ trip                | trip_block_delete          | O         | CREATE TRIGGER trip_block_delete BEFORE DELETE ON public.trip FOR EACH ROW EXECUTE FUNCTION trip_block_delete()
+ trip                | trip_enforce_transition    | O         | CREATE TRIGGER trip_enforce_transition BEFORE INSERT OR UPDATE ON public.trip FOR EACH ROW EXECUTE FUNCTION trip_enforce_transition()
+ trip                | trip_write_history         | O         | CREATE TRIGGER trip_write_history AFTER INSERT OR UPDATE ON public.trip FOR EACH ROW EXECUTE FUNCTION trip_write_history()
+ trip_status_history | append_only_guard          | O         | CREATE TRIGGER append_only_guard BEFORE DELETE OR UPDATE ON public.trip_status_history FOR EACH ROW EXECUTE FUNCTION append_only_guard()
+ vehicle             | set_updated_at             | O         | CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.vehicle FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+(27 rows)
+
+          proname           |     body_without_errcode_md5     
+----------------------------+----------------------------------
+ add_support_note           | d03a13bafbaef3b87d2948d1ebdd1cc0
+ append_only_guard          | d7cc23df13d3e788bdce4b4a0f5292cb
+ erase_driver               | 9ce908fae6f64ae4b880888fffb5d9cc
+ erase_rider                | ba827aa36342957379fdd1ffcf4a6b46
+ payment_enforce_rules      | b5883ed2d3b7a30c28137ac4eb07e787
+ payment_write_audit        | e07b04f10473a82161f88facc376696e
+ ping_enforce_trip_status   | 9f6934c9a16148686f9631e947e8a843
+ provider_event_guard       | 3ab805cfd0e6cbe15ad9b923ab69c9b2
+ provider_event_write_audit | f39c81a864206c88a381db0b74256401
+ rating_block_change        | f2c445d88c7fdb7c4ae018730cc80357
+ rating_enforce_rules       | 41d5a6962f62a9bf15b846297269cfce
+ rating_update_cache        | d609fb34449a3be4bfc690b46a6c6cea
+ refund_enforce_total       | 2302f609456356f51820fca535303c2d
+ set_updated_at             | 92b6cd4dc622b0a778614343a208a08b
+ setting_write_audit        | 00f72b1f432d0d25cb7db3d0185454f8
+ trip_block_delete          | 17676f6f1a991f04587502de0ab7b88f
+ trip_enforce_transition    | b2aa212441943d56e98e802dc22ed43d
+ trip_write_history         | eee2a70d6cf5b1a91dae1d658fc6039b
+(18 rows)
+
+         proname          | raise_exceptions | errcodes 
+--------------------------+------------------+----------
+ add_support_note         |                2 |        0
+ append_only_guard        |                1 |        0
+ erase_driver             |                2 |        0
+ erase_rider              |                2 |        0
+ payment_enforce_rules    |               12 |        0
+ ping_enforce_trip_status |                1 |        0
+ provider_event_guard     |                3 |        0
+ rating_block_change      |                1 |        0
+ rating_enforce_rules     |                5 |        0
+ refund_enforce_total     |                3 |        0
+ setting_write_audit      |                1 |        0
+ trip_block_delete        |                1 |        0
+ trip_enforce_transition  |               15 |        0
+(13 rows)
+
+        rolname         | rolsuper | rolcanlogin 
+------------------------+----------+-------------
+ ridehail               | t        | t
+ ridehail_app           | f        | f
+ ridehail_erasure_owner | f        | f
+ ridehail_writer        | f        | f
+(4 rows)
+
+               datacl                
+-------------------------------------
+ {=c/ridehail,ridehail=CTc/ridehail}
+(1 row)
+

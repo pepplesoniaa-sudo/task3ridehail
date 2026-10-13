@@ -1,0 +1,130 @@
+##### APPLY 010 (psql -1 -v ON_ERROR_STOP=1)
+CREATE ROLE
+GRANT
+GRANT
+GRANT
+GRANT
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+GRANT
+REVOKE
+REVOKE
+ALTER TABLE
+CREATE INDEX
+apply seconds: 22.9
+##### SHOW after 010
+                 List of relations
+ Schema |          Name          | Type  |  Owner   
+--------+------------------------+-------+----------
+ public | audit_log              | table | ridehail
+ public | driver                 | table | ridehail
+ public | fare_quote             | table | ridehail
+ public | idempotency_key        | table | ridehail
+ public | location_ping          | table | ridehail
+ public | payment                | table | ridehail
+ public | provider_event         | table | ridehail
+ public | rating                 | table | ridehail
+ public | refund                 | table | ridehail
+ public | rider                  | table | ridehail
+ public | setting                | table | ridehail
+ public | status_transition_rule | table | ridehail
+ public | support_admin          | table | ridehail
+ public | trip                   | table | ridehail
+ public | trip_status_history    | table | ridehail
+ public | vehicle                | table | ridehail
+(16 rows)
+
+                                                                               roles                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ ridehail(login=true,super=true), ridehail_app(login=false,super=false), ridehail_erasure_owner(login=false,super=false), ridehail_writer(login=false,super=false)
+(1 row)
+
+          proname           |      owner      | security_definer |               config               | app_may_call 
+----------------------------+-----------------+------------------+------------------------------------+--------------
+ add_support_note           | ridehail_writer | t                | {"search_path=pg_catalog, public"} | t
+ payment_write_audit        | ridehail_writer | t                | {"search_path=pg_catalog, public"} | t
+ provider_event_write_audit | ridehail_writer | t                | {"search_path=pg_catalog, public"} | t
+ setting_write_audit        | ridehail_writer | t                | {"search_path=pg_catalog, public"} | t
+ trip_write_history         | ridehail_writer | t                | {"search_path=pg_catalog, public"} | t
+(5 rows)
+
+     grantee     |     table_name      | privileges 
+-----------------+---------------------+------------
+ ridehail_app    | audit_log           | SELECT
+ ridehail_app    | trip_status_history | SELECT
+ ridehail_writer | audit_log           | INSERT
+ ridehail_writer | trip_status_history | INSERT
+(4 rows)
+
+     grantee     |     table_name      |    column_name     | privilege_type 
+-----------------+---------------------+--------------------+----------------
+ ridehail_writer | audit_log           | action             | INSERT
+ ridehail_writer | audit_log           | actor_admin_id     | INSERT
+ ridehail_writer | audit_log           | actor_driver_id    | INSERT
+ ridehail_writer | audit_log           | actor_rider_id     | INSERT
+ ridehail_writer | audit_log           | actor_role         | INSERT
+ ridehail_writer | audit_log           | created_at         | INSERT
+ ridehail_writer | audit_log           | details            | INSERT
+ ridehail_writer | audit_log           | entity_id          | INSERT
+ ridehail_writer | audit_log           | entity_type        | INSERT
+ ridehail_writer | audit_log           | id                 | INSERT
+ ridehail_writer | audit_log           | note               | INSERT
+ ridehail_writer | audit_log           | updated_at         | INSERT
+ ridehail_writer | payment             | id                 | SELECT
+ ridehail_writer | payment             | provider_reference | SELECT
+ ridehail_writer | refund              | id                 | SELECT
+ ridehail_writer | refund              | provider_reference | SELECT
+ ridehail_writer | trip_status_history | actor_admin_id     | INSERT
+ ridehail_writer | trip_status_history | actor_driver_id    | INSERT
+ ridehail_writer | trip_status_history | actor_rider_id     | INSERT
+ ridehail_writer | trip_status_history | actor_role         | INSERT
+ ridehail_writer | trip_status_history | created_at         | INSERT
+ ridehail_writer | trip_status_history | from_status        | INSERT
+ ridehail_writer | trip_status_history | id                 | INSERT
+ ridehail_writer | trip_status_history | seq                | INSERT
+ ridehail_writer | trip_status_history | to_status          | INSERT
+ ridehail_writer | trip_status_history | trip_id            | INSERT
+ ridehail_writer | trip_status_history | updated_at         | INSERT
+(27 rows)
+
+                                Table "public.trip_status_history"
+     Column      |           Type           | Collation | Nullable |           Default            
+-----------------+--------------------------+-----------+----------+------------------------------
+ id              | uuid                     |           | not null | gen_random_uuid()
+ trip_id         | uuid                     |           | not null | 
+ from_status     | text                     |           |          | 
+ to_status       | text                     |           | not null | 
+ actor_role      | text                     |           | not null | 
+ actor_rider_id  | uuid                     |           |          | 
+ actor_driver_id | uuid                     |           |          | 
+ actor_admin_id  | uuid                     |           |          | 
+ created_at      | timestamp with time zone |           | not null | now()
+ updated_at      | timestamp with time zone |           | not null | now()
+ seq             | bigint                   |           | not null | generated always as identity
+Indexes:
+Indexes:
+    "trip_status_history_pkey" PRIMARY KEY, btree (id)
+    "trip_status_history_pkey" PRIMARY KEY, btree (id)
+    "trip_status_history_trip_idx" btree (trip_id, created_at)
+    "trip_status_history_trip_seq_idx" btree (trip_id, seq)
+Check constraints:
+indexes total: 42
+sequences: trip_status_history_seq_seq
+functions in public: 18
+triggers (non-internal): 27
+constraints p,u,f,c: 116
+##### ROW COUNTS after 010 (before: history 932072, history small set 41, audit 169016 = 9 small + 169007 bulk)
+ history_all | history_small_set_12_trips | audit_all | audit_small_set | trips  
+-------------+----------------------------+-----------+-----------------+--------
+      932072 |                         41 |    169016 |               9 | 200012
+(1 row)
+

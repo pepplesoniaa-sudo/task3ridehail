@@ -1,0 +1,140 @@
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+################ PART 1: partial indexes
+=== 1a trip_requested_created_at_idx: condition repeated exactly (status = requested)
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Limit
+   ->  Index Scan using trip_requested_created_at_idx on trip
+(2 rows)
+=== 1b condition changed: status IN (requested, assigned)
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: created_at
+         ->  Bitmap Heap Scan on trip
+               Recheck Cond: (status = ANY ('{requested,assigned,arrived,started}'::text[]))
+               Filter: (status = ANY ('{requested,assigned}'::text[]))
+               ->  Bitmap Index Scan on trip_one_active_per_driver
+(7 rows)
+=== 1c condition changed: status <> completed
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Limit
+   ->  Gather Merge
+         Workers Planned: 2
+         ->  Sort
+               Sort Key: created_at
+               ->  Parallel Seq Scan on trip
+                     Filter: (status <> 'completed'::text)
+(7 rows)
+=== 1d trip_one_active_per_rider: condition repeated exactly (the four active statuses), one rider
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ Index Scan using trip_one_active_per_rider on trip
+   Index Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+(2 rows)
+=== 1e condition changed: status <> completed
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Bitmap Heap Scan on trip
+   Recheck Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+   Filter: (status <> 'completed'::text)
+   ->  Bitmap Index Scan on trip_rider_history_idx
+         Index Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+(5 rows)
+=== 1f no status condition at all
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Bitmap Heap Scan on trip
+   Recheck Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+   ->  Bitmap Index Scan on trip_rider_history_idx
+         Index Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+(4 rows)
+=== 1g payment_pending_created_at_idx: condition repeated exactly (status = pending)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Limit
+   ->  Index Scan using payment_pending_created_at_idx on payment
+         Index Cond: (created_at < now())
+(3 rows)
+=== 1h condition changed: status <> succeeded
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Merge
+         Workers Planned: 2
+         ->  Sort
+               Sort Key: created_at
+               ->  Parallel Seq Scan on payment
+                     Filter: ((status <> 'succeeded'::text) AND (created_at < now()))
+(7 rows)
+=== 1i condition changed: status IN (pending, failed)
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Merge
+         Workers Planned: 2
+         ->  Sort
+               Sort Key: created_at
+               ->  Parallel Seq Scan on payment
+                     Filter: ((status = ANY ('{pending,failed}'::text[])) AND (created_at < now()))
+(7 rows)
+################ PART 2: chosen indexes not touched by A1 to A5
+=== 2a refund_payment_id_idx: the refund trigger sum (the refund table has 1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate
+   InitPlan 1 (returns $0)
+     ->  Index Scan using payment_provider_reference_key on payment
+           Index Cond: (provider_reference = 'PRV-T01-A'::text)
+   ->  Seq Scan on refund
+         Filter: (payment_id = $0)
+(6 rows)
+=== 2b trip_driver_history_idx: a driver's history, keyset page
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Limit
+   ->  Index Scan using trip_driver_history_idx on trip
+         Index Cond: (driver_id = '20000000-0000-0000-0000-000000000500'::uuid)
+(3 rows)
+=== 2c provider_event_reference_idx: the P3 proof lookup (17544 events)
+                                                           QUERY PLAN                                                           
+--------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using provider_event_reference_idx on provider_event e
+   Index Cond: (provider_reference = 'BULK-PRV-500'::text)
+   Filter: ((received_at >= $0) AND (event_type = 'payment_not_found'::text) AND (received_at >= (now() - '1 year'::interval)))
+   InitPlan 1 (returns $0)
+     ->  Aggregate
+           ->  Index Scan using provider_event_reference_idx on provider_event x
+                 Index Cond: (provider_reference = 'BULK-PRV-500'::text)
+(7 rows)
+=== 2d vehicle_driver_id_idx
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Index Scan using vehicle_driver_id_idx on vehicle
+   Index Cond: (driver_id = '20000000-0000-0000-0000-000000000400'::uuid)
+   Filter: (is_active AND (deleted_at IS NULL))
+(3 rows)
+=== 2e trip_status_history_trip_idx
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Index Scan using trip_status_history_trip_idx on trip_status_history
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000000100'::uuid)
+(2 rows)
+=== 2f location_ping_trip_recorded_idx
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Limit
+   ->  Index Scan using location_ping_trip_recorded_idx on location_ping
+         Index Cond: (trip_id = '40000000-0000-0000-0000-000000000100'::uuid)
+(3 rows)
+=== 2g trip_rider_history_idx
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Limit
+   ->  Index Only Scan using trip_rider_history_idx on trip
+         Index Cond: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+(3 rows)

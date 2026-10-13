@@ -1,0 +1,125 @@
+# Chapter 5. Constraints and indexes
+@SRC Built from docs/04_hard_questions.md (questions 6 and 7), evidence/catalogue_check_016.txt, db/migrations/004_quotes_trips.sql (lines 108 to 111), db/migrations/005_money.sql (lines 30 to 31), db/migrations/016_payment_trip_id_index.sql, and evidence/migration_016_measure_before.txt and _after.txt (the P1 plan node lines only).
+
+## Invalid states that are now impossible
+@P First every table, then the table of invalid states that are now impossible. "Tested" points to a rolled back run. The ids are: steps 1 to 16 are the trigger test in 03_state_machine.md section 7; P, R, I and G ids are the payment, refund, idempotency and rating tests of the Stage 2 report; E ids are the provider_event test in 03 section 4a; X ids are the erasure test in question 4; S ids are the stuck-payment test in 03 section 4b (test 4 of the round 2 report). "Not tested" means I reasoned it only.
+@TBL 8
+Invalid state | ID | Exact blocker | Enforced by | Tested
+A rider with two active trips | B1 | partial unique index trip_one_active_per_rider | database | yes, trigger test step 2
+A driver with two active trips | B2 | partial unique index trip_one_active_per_driver | database | yes, step 5
+A rating without a completed trip | B7 | trigger rating_enforce_rules | database | yes, G4
+A rating after the 7 days | B7 | trigger rating_enforce_rules | database | yes, G5 (test used a fixed 7 days; the real trigger reads the setting)
+A second rating by the same person on a trip | B7 | unique constraint rating_one_per_role_per_trip | database | yes, G2
+Two payments for one trip fare | A4, B6 | partial unique index payment_one_live_per_purpose | database | yes, P2 and P4
+A duplicate idempotency key | B6 | unique constraint idem_one_key_per_rider_action | database (the replay of the stored answer is application code) | yes, I1; I2 and I3 show it is per rider and per action
+A duplicate provider payment reference | B6 | unique constraint payment_provider_reference_key | database | yes, P8
+A negative or zero payment | B3 | payment_amount_positive | database | yes, P5 and P6
+Negative amounts elsewhere | B3 | quote_amount_not_negative, trip_amounts_not_negative, refund_amount_positive, setting_value_not_negative | database | not tested (same kind of check as P5)
+A currency other than NGN | B3 | payment_currency_ngn, quote_currency_ngn, trip_currency_ngn, refund_currency_ngn, setting_currency_ngn | database | yes for payment (P7); the others not tested
+Editing a completed trip's fare | B4 | terminal freeze in trip_enforce_transition | database | yes, step 12
+A completed trip with no fare | B4 | trip_completed_has_facts | database | not tested at first; later yes on the built database, E42 (SQLSTATE 23514, "violates check constraint "trip_completed_has_facts"", evidence/migration_015_error_tests_compare.txt line 60)
+Refunds above the payment | B10 | trigger refund_enforce_total | database | yes, R2 and R4; R5 for a non-succeeded payment
+A trip using another driver's vehicle | A2 | trip_vehicle_belongs_to_driver | database | not tested at first; later yes on the built database, E09 (SQLSTATE 23503, "violates foreign key constraint "trip_vehicle_belongs_to_driver"", same file, line 12)
+A trip using another rider's quote | A1 | trip_quote_belongs_to_rider | database | not tested at first; later yes on the built database, E02a and E02b (SQLSTATE 23503, "violates foreign key constraint "trip_quote_belongs_to_rider"", same file, lines 3 and 4)
+A trip started on an expired quote | A1 | trigger trip_enforce_transition (insert branch) | database | not tested at first; later yes on the built database, E04 (SQLSTATE RH004, "fare quote ... has expired", same file, line 6)
+A location ping on a finished trip | A3 | trigger ping_enforce_trip_status | database | not tested at first; later yes on the built database, E10 (SQLSTATE RH030, "a location ping needs a trip that is assigned, arrived or started (status is completed)", same file, line 13)
+An illegal status move | B5 | status_transition_rule + trip_enforce_transition | database | yes, steps 3, 6 to 8, 10, 11, 14, 16
+A status change with no history row | B5 | trigger trip_write_history | database | yes (9 history rows in the test)
+A decimal amount such as 10.5 kobo | B3 | API validation | application code only | confirmed that the database does not stop it (question 2)
+A person reading or changing someone else's trip | B8 | ownership check on every endpoint | application code only (the trigger check on the claimed actor id helps, but only trusts what the app says) | not applicable yet
+A retry that gets a new answer instead of the stored one | B6 | code that looks up and returns response_body | application code only | not applicable yet
+Support failing a pending payment with no proof, with the wrong reference, the wrong type, or an old event | A4, B6 | trigger payment_enforce_rules (move P3 lookup) | database | yes, test 4 S1 to S4
+Support failing a succeeded payment, or marking a pending one succeeded | A4, B6 | terminal freeze and no rule row for that move | database | yes, test 4 S7 and S8
+A provider callback applied twice | U4, B6 | unique constraint provider_event_provider_event_id_key (the second message is refused or does nothing) | database (the handler that decides outcomes is application code) | yes, test 1 steps E1 to E3b (one row after repeats)
+Our own clock marking a pending payment as failed | A4 | no row for actor system in the payment rules, and trigger payment_enforce_rules | database | not tested (same lookup as the trip moves)
+The API role blanking an address or editing a rating comment directly | B4, B8 | the freeze trigger and rating_block_change check current_user | database | yes, test 2 steps X1 to X3
+A role with no grant calling the erasure function | B8 | EXECUTE revoked from PUBLIC and granted only to ridehail_app | database | yes, test 2 step X7
+Erasing a person with an active trip | B8 | check inside erase_rider and erase_driver | database (the driver version was untested at first) | yes for riders, test 2 step X6; for drivers, later on the built database: the refusal is E26b (SQLSTATE RH071, "driver ... has an active trip: cannot erase (B8)", evidence/migration_015_error_tests_compare.txt line 31) and erase_driver itself ran in X6e (evidence/proofs_rejected_and_extra.txt, line 256)
+A request cancelled by a non-system actor for timeout, or the system cancelling an assigned trip | B9 | rule rows in status_transition_rule | database | not tested
+A timeout job that never runs | B9, B1 | the scheduled job | application code only | not applicable yet
+@END
+
+## The catalogue check
+@P The catalogue check and three passes after migration 016 and the document updates (2026-10-07T15:48Z) compared the documents with the database: tables 16, constraints 116, indexes 42, triggers 27, functions 18 and roles 4, with total mismatches 0. Pass 2 counted 22 foreign key rows and 66 check rows, and the index count from documents as 32 constraint-backed plus 10 chosen, which is 42.
+@TBL 9
+Object | Count
+Tables | 16
+Constraints | 116
+Indexes | 42
+Triggers | 27
+Functions | 18
+Roles | 4
+@END
+
+## Per entity constraints: payment as the model
+@TBL 9
+Kind | Name | Rule | Index or justification
+PK | payment_pkey | id | own index
+UNIQUE | payment_provider_reference_key | provider_reference, which is a required column: a payment row exists only after the provider returned its reference, so every payment can be matched with provider_event rows | own index
+UNIQUE (partial) | payment_one_live_per_purpose | (trip_id, purpose) where status is pending or succeeded | own index
+FK | payment_trip_id_fkey | trip_id -> trip.id | index payment_trip_id_idx (migration 016, Stage 4: before it, this column had no index of its own; payment_one_live_per_purpose is partial and covers live payments only)
+CHECK | payment_purpose_valid | fare or cancellation_fee | none needed
+CHECK | payment_status_valid | pending, succeeded or failed | none needed
+CHECK | payment_amount_positive | amount_minor above 0 | none needed
+CHECK | payment_currency_ngn | currency is NGN | none needed
+CHECK | payment_succeeded_has_proof | succeeded needs provider_reference and paid_at; paid_at only when succeeded | none needed
+CHECK | payment_failed_has_reason | failed needs failure_reason, and only then | none needed
+Trigger | payment_enforce_rules | insert: pending only, by the trip rider (claimed actor), for a completed trip fare or a cancelled trip fee, exact amount. Terminal rows: only updated_at may change. Pending rows: a status change needs a rule row for the claimed actor and only the columns of the move may change. For move P3 (support fails a pending payment): a payment_not_found event for the same provider_reference, received after the payment was created AND not older than the latest provider event of ANY type for that reference (a later payment_succeeded cancels the proof). Proved on the real database (X5a to X5c) | uses index provider_event_reference_idx for that lookup
+Trigger | payment_write_audit | after a status change, writes audit_log (status_change, from and to) with the claimed actor. No row at creation. SECURITY DEFINER, owner ridehail_writer. EXECUTE revoked from PUBLIC (migration 012); search_path ends with pg_temp (migration 013) | n/a
+Trigger | set_updated_at | | n/a
+@END
+@P The other 15 per entity tables are in docs/04_hard_questions.md and listed in the appendix by name.
+
+## Indexes
+@P I add few indexes beyond the ones constraints already create. A new index makes every write slower and takes space, so each one below earns its place by a named query. Ten are created on purpose.
+@TBL 9
+Index | Table | Columns | Query it serves
+trip_requested_created_at_idx | trip | (created_at) WHERE status = 'requested' | A2 open requests near a driver and the request timeout job; a partial index holds only waiting trips
+vehicle_driver_id_idx | vehicle | (driver_id) | A2 find the driver's vehicle; also supports vehicle_driver_id_fkey
+trip_status_history_trip_seq_idx | trip_status_history | (trip_id, seq) | A3 status timeline ordered by seq; also supports history_trip_id_fkey
+location_ping_trip_recorded_idx | location_ping | (trip_id, recorded_at DESC) | A3 latest driver position for the rider's map; also supports ping_trip_id_fkey
+refund_payment_id_idx | refund | (payment_id) | the refund total check (B10); also supports refund_payment_id_fkey
+trip_rider_history_idx | trip | (rider_id, created_at DESC, id DESC) | rider history list pages with keyset pagination; also supports trip_rider_id_fkey
+trip_driver_history_idx | trip | (driver_id, created_at DESC, id DESC) | driver history list pages with keyset pagination; also supports trip_driver_id_fkey
+payment_pending_created_at_idx | payment | (created_at) WHERE status = 'pending' | reconciliation job for pending payments older than a setting
+provider_event_reference_idx | provider_event | (provider_reference) | the P3 lookup in payment_enforce_rules
+payment_trip_id_idx | payment | (trip_id) | EP03 every payment of a trip (any status, so a failed attempt stays visible), EP15 and the support payment views
+@END
+@P The other 32 indexes exist because a constraint made them: PK and UNIQUE constraints create their own index.
+
+## The statements that enforce the rules
+@P B0, B1, B2: ACTIVE means requested, assigned, arrived, started. A trip with no driver has an empty driver_id, which never collides in the driver index, so it counts for the rider only. A partial unique index makes two active trips impossible, one per rider and one per driver.
+@CODE
+CREATE UNIQUE INDEX trip_one_active_per_rider ON trip (rider_id)
+  WHERE status IN ('requested','assigned','arrived','started');
+CREATE UNIQUE INDEX trip_one_active_per_driver ON trip (driver_id)
+  WHERE status IN ('requested','assigned','arrived','started');
+@END
+@P A4, B6: one live (pending or succeeded) payment per trip and purpose. A failed one does not block a retry.
+@CODE
+CREATE UNIQUE INDEX payment_one_live_per_purpose ON payment (trip_id, purpose)
+  WHERE status IN ('pending','succeeded');
+@END
+
+### An index added in Stage 4: the payments of a trip
+@P In migration 016 an ordinary index was added on payment (trip_id), serving A4, B6, U1, U3 (EP03 payments of a trip, EP15 payment lookup per trip, support payment views). The only index that starts with trip_id on payment is payment_one_live_per_purpose, which is PARTIAL (pending and succeeded only), so a read of every payment of a trip (any status) could not use it and was a parallel sequential scan of the whole table (169,410 rows); the foreign key payment_trip_id_fkey also had no index on its referencing column.
+@CODE
+CREATE INDEX payment_trip_id_idx ON payment (trip_id);
+@END
+@P Before migration 016 the P1 read of all payments of a trip (every status), run 1, was:
+@CODE
+ Gather (actual time=9.595..17.314 rows=1 loops=1)
+   Workers Planned: 2
+   Workers Launched: 2
+   Buffers: shared hit=3427
+   ->  Parallel Seq Scan on payment (actual time=8.226..9.490 rows=0 loops=3)
+         Filter: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Rows Removed by Filter: 56470
+@END
+@P After migration 016 the same read, run 1, is:
+@CODE
+ Index Scan using payment_trip_id_idx on payment (actual time=0.073..0.074 rows=1 loops=1)
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+   Buffers: shared hit=1 read=3
+@END
+@P The list of migrations 001 to 016 by file name is in Appendix B.

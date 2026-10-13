@@ -1,0 +1,12 @@
+##### VACUUM (ANALYZE) trip, payment, trip_status_history
+VACUUM
+VACUUM
+VACUUM
+vacuum seconds: 7.9
+       relname       | n_live_tup | n_dead_tup | vacuumed_now 
+---------------------+------------+------------+--------------
+ payment             |     169410 |         16 | t
+ trip                |     200012 |         56 | t
+ trip_status_history |     932072 |         47 | t
+(3 rows)
+

@@ -1,0 +1,41 @@
+##### DRY RUN 013 (BEGIN ... ROLLBACK): the migration, then attacks E1 and E4 as ridehail_app
+------ dry run with attack E1 (own session)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-T03-A          | succeeded
+(1 row)
+
+UPDATE 1
+ rows_in_public_audit_log | rows_in_the_temp_table 
+--------------------------+------------------------
+                        1 |                      0
+(1 row)
+
+ROLLBACK_BY_DISCONNECT
+------ dry run with attack E4 (own session)
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+INSERT 0 1
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+ERROR:  illegal transition assigned -> started by driver
+CONTEXT:  PL/pgSQL function trip_enforce_transition() line 54 at RAISE
+ROLLBACK_BY_DISCONNECT
+##### after the dry runs the functions are unchanged:
+0 of 18 functions have pg_temp in their config

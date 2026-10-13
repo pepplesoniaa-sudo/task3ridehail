@@ -1,0 +1,37 @@
+##### DRY RUN 010 inside BEGIN ... ROLLBACK, plus a real trip move and a payment/setting change as ridehail_app before the rollback
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+GRANT
+REVOKE
+REVOKE
+ALTER TABLE
+CREATE INDEX
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000003
+(1 row)
+
+UPDATE 1
+RESET
+ has_seq | from_status | to_status | actor_role |           actor_driver_id            
+---------+-------------+-----------+------------+--------------------------------------
+ t       |             | requested | rider      | 
+ t       | requested   | assigned  | driver     | bbbbbbbb-0000-0000-0000-000000000003
+ t       | assigned    | arrived   | driver     | bbbbbbbb-0000-0000-0000-000000000003
+(3 rows)
+
+ROLLBACK
+dry run seconds: 25.6
+##### after the dry run nothing is left:
+roles: ridehail,ridehail_app,ridehail_erasure_owner
+seq column exists: 0
+add_support_note exists: 0
+trip_write_history security definer: false

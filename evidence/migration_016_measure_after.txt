@@ -1,0 +1,218 @@
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+=== S1 sizes: payment table and its indexes
+ table_size | all_indexes_size | payment_rows | indexes_in_database 
+------------+------------------+--------------+---------------------
+ 27 MB      | 39 MB            |       169410 |                  42
+(1 row)
+
+           index_name           |  bytes   |  mb   |                                                                             definition                                                                             
+--------------------------------+----------+-------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ payment_pkey                   |  8396800 |  8.01 | CREATE UNIQUE INDEX payment_pkey ON public.payment USING btree (id)
+ payment_provider_reference_key | 11067392 | 10.55 | CREATE UNIQUE INDEX payment_provider_reference_key ON public.payment USING btree (provider_reference)
+ payment_one_live_per_purpose   | 14729216 | 14.05 | CREATE UNIQUE INDEX payment_one_live_per_purpose ON public.payment USING btree (trip_id, purpose) WHERE (status = ANY (ARRAY['pending'::text, 'succeeded'::text]))
+ payment_pending_created_at_idx |   942080 |  0.90 | CREATE INDEX payment_pending_created_at_idx ON public.payment USING btree (created_at) WHERE (status = 'pending'::text)
+ payment_trip_id_idx            |  5373952 |  5.13 | CREATE INDEX payment_trip_id_idx ON public.payment USING btree (trip_id)
+(5 rows)
+
+=== P1 all payments of a trip (every status), run 1 and run 2
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Index Scan using payment_trip_id_idx on payment (actual time=0.073..0.074 rows=1 loops=1)
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+   Buffers: shared hit=1 read=3
+ Planning:
+   Buffers: shared hit=17
+ Planning Time: 0.201 ms
+ Execution Time: 0.097 ms
+(7 rows)
+
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Index Scan using payment_trip_id_idx on payment (actual time=0.045..0.047 rows=1 loops=1)
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000198904'::uuid)
+   Buffers: shared hit=4
+ Planning Time: 0.081 ms
+ Execution Time: 0.063 ms
+(5 rows)
+
+=== P2 a seed trip that has exactly one payment (trip 04, the cancellation fee)
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Index Scan using payment_trip_id_idx on payment (actual time=0.073..0.074 rows=1 loops=1)
+   Index Cond: (trip_id = 'eeeeeeee-0000-0000-0000-000000000004'::uuid)
+   Buffers: shared hit=3 read=1
+ Planning Time: 0.063 ms
+ Execution Time: 0.086 ms
+(5 rows)
+
+=== P3 EP03 full read (trip + quote + all payments), run 1 and run 2
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.108..0.110 rows=1 loops=1)
+   Buffers: shared hit=12
+   ->  Index Scan using trip_pkey on trip t (actual time=0.039..0.039 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Filter: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+         Buffers: shared hit=4
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.019..0.019 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+         Buffers: shared hit=4
+   SubPlan 1
+     ->  Aggregate (actual time=0.043..0.044 rows=1 loops=1)
+           Buffers: shared hit=4
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.011..0.011 rows=1 loops=1)
+                 Index Cond: (trip_id = t.id)
+                 Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=330
+ Planning Time: 1.434 ms
+ Execution Time: 0.158 ms
+(19 rows)
+
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=0.121..0.123 rows=1 loops=1)
+   Buffers: shared hit=12
+   ->  Index Scan using trip_pkey on trip t (actual time=0.024..0.025 rows=1 loops=1)
+         Index Cond: (id = '40000000-0000-0000-0000-000000198904'::uuid)
+         Filter: (rider_id = '10000000-0000-0000-0000-000000000777'::uuid)
+         Buffers: shared hit=4
+   ->  Index Scan using fare_quote_id_rider_id_key on fare_quote q (actual time=0.010..0.010 rows=1 loops=1)
+         Index Cond: (id = t.fare_quote_id)
+         Buffers: shared hit=4
+   SubPlan 1
+     ->  Aggregate (actual time=0.079..0.080 rows=1 loops=1)
+           Buffers: shared hit=4
+           ->  Index Scan using payment_trip_id_idx on payment p (actual time=0.025..0.026 rows=1 loops=1)
+                 Index Cond: (trip_id = t.id)
+                 Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=20
+ Planning Time: 0.558 ms
+ Execution Time: 0.213 ms
+(19 rows)
+
+=== I1 a payment insert: rider 668 pays the cancellation fee of bulk trip 111893 (50000 kobo). EXPLAIN (ANALYZE) of the INSERT, rolled back. Run 1 in full:
+BEGIN
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000000668
+(1 row)
+
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Insert on payment (actual time=3.647..3.648 rows=0 loops=1)
+   Buffers: shared hit=99 read=3 dirtied=3
+   ->  Result (actual time=0.032..0.033 rows=1 loops=1)
+ Planning:
+   Buffers: shared hit=6
+ Planning Time: 0.059 ms
+ Trigger for constraint payment_trip_id_fkey: time=0.489 calls=1
+ Trigger payment_enforce_rules: time=2.560 calls=1
+ Execution Time: 4.164 ms
+(9 rows)
+
+ROLLBACK
+=== I2 to I6 the same insert 5 more times (only the timing lines matter; each run is rolled back)
+BEGIN
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000000668
+(1 row)
+
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Insert on payment (actual time=2.606..2.607 rows=0 loops=1)
+   ->  Result (actual time=0.030..0.032 rows=1 loops=1)
+ Planning Time: 0.037 ms
+ Trigger for constraint payment_trip_id_fkey: time=0.161 calls=1
+ Trigger payment_enforce_rules: time=0.349 calls=1
+ Execution Time: 2.794 ms
+(6 rows)
+
+ROLLBACK
+BEGIN
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000000668
+(1 row)
+
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Insert on payment (actual time=1.408..1.409 rows=0 loops=1)
+   ->  Result (actual time=0.029..0.030 rows=1 loops=1)
+ Planning Time: 0.039 ms
+ Trigger for constraint payment_trip_id_fkey: time=0.225 calls=1
+ Trigger payment_enforce_rules: time=0.359 calls=1
+ Execution Time: 1.661 ms
+(6 rows)
+
+ROLLBACK
+BEGIN
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000000668
+(1 row)
+
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Insert on payment (actual time=2.172..2.173 rows=0 loops=1)
+   ->  Result (actual time=0.039..0.040 rows=1 loops=1)
+ Planning Time: 0.036 ms
+ Trigger for constraint payment_trip_id_fkey: time=0.247 calls=1
+ Trigger payment_enforce_rules: time=0.470 calls=1
+ Execution Time: 2.446 ms
+(6 rows)
+
+ROLLBACK
+BEGIN
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000000668
+(1 row)
+
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Insert on payment (actual time=1.572..1.572 rows=0 loops=1)
+   ->  Result (actual time=0.034..0.035 rows=1 loops=1)
+ Planning Time: 0.048 ms
+ Trigger for constraint payment_trip_id_fkey: time=0.181 calls=1
+ Trigger payment_enforce_rules: time=0.349 calls=1
+ Execution Time: 1.781 ms
+(6 rows)
+
+ROLLBACK
+BEGIN
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000000668
+(1 row)
+
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Insert on payment (actual time=2.517..2.518 rows=0 loops=1)
+   ->  Result (actual time=0.026..0.027 rows=1 loops=1)
+ Planning Time: 0.034 ms
+ Trigger for constraint payment_trip_id_fkey: time=0.346 calls=1
+ Trigger payment_enforce_rules: time=0.601 calls=1
+ Execution Time: 2.906 ms
+(6 rows)
+
+ROLLBACK
+=== after the rollbacks: payments for trip 111893 and total rows (nothing kept)
+ payments_trip_111893 | payment_rows 
+----------------------+--------------
+                    0 |       169410
+(1 row)
+

@@ -1,0 +1,44 @@
+SET
+      cu      
+--------------
+ ridehail_app
+(1 row)
+
+=== S1 the three price settings as stored
+       key        | int_value | currency 
+------------------+-----------+----------
+ base_fare_minor  |     50000 | NGN
+ per_km_minor     |     15000 | NGN
+ per_minute_minor |      3000 | NGN
+(3 rows)
+
+=== S2 the placeholder estimator for pickup 6.45, 3.39 and dropoff 6.50, 3.35: flat earth distance times 1.3, speed 8.33 metres per second
+ straight_line_m | distance_m | duration_s 
+-----------------+------------+------------
+        7110.249 |       9243 |       1110
+(1 row)
+
+=== S3 worked example with the REAL setting values: three ways to compute the same fare must agree
+ base  | per_km | per_min | distance_m | duration_s |    km_part_exact    | minute_part_exact  |     fare_exact      | fare_round_once_numeric | fare_integer_formula 
+-------+--------+---------+------------+------------+---------------------+--------------------+---------------------+-------------------------+----------------------
+ 50000 |  15000 |    3000 |       9243 |       1110 | 138645.000000000000 | 55500.000000000000 | 244145.000000000000 |                  244145 |               244145
+(1 row)
+
+=== S4 why ONE rounding: a HYPOTHETICAL price list (not stored) where rounding each part gives a different answer. base 50000, per_km 12345, per_minute 777, distance 5001 m, duration 1111 s
+   km_part_exact    | minute_part_exact  |     fare_exact      | round_once_at_the_end | round_each_part_then_add | integer_formula 
+--------------------+--------------------+---------------------+-----------------------+--------------------------+-----------------
+ 61737.345000000000 | 14387.450000000000 | 126124.795000000000 |                126125 |                   126124 |          126125
+(1 row)
+
+=== S5 the half case: exact 0.5 kobo rounds up to 1; 1.499 rounds to 1; 1.5 rounds to 2; 0 stays 0
+ half_of_a_kobo_gives | one_point_499_gives | one_point_5_gives | zero_gives 
+----------------------+---------------------+-------------------+------------
+                    1 |                   1 |                 2 |          0
+(1 row)
+
+=== S6 limits: the largest values the contract allows must fit in bigint (numerator below 9.2e18)
+ largest_numerator | fits_in_bigint 
+-------------------+----------------
+  7323000000001500 | t
+(1 row)
+

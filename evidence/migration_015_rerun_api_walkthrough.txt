@@ -1,0 +1,282 @@
+BEGIN
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+--- A1 request: idempotency row first, then the quote ownership check, then the trip, then the stored response (one transaction)
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+                  id                  | amount_minor | currency | still_valid 
+--------------------------------------+--------------+----------+-------------
+ 50000000-0000-0000-0000-0000000f0001 |       135000 | NGN      | t
+(1 row)
+
+INSERT 0 1
+ first_request 
+---------------
+ t
+(1 row)
+
+INSERT 0 1
+               quote_id               
+--------------------------------------
+ 50000000-0000-0000-0000-0000000f0001
+(1 row)
+
+                  id                  |  status   |               rider_id               
+--------------------------------------+-----------+--------------------------------------
+ 90000000-0000-0000-0000-0000000f0001 | requested | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+INSERT 0 1
+ response_status | has_trip 
+-----------------+----------
+             201 | t
+(1 row)
+
+UPDATE 1
+--- the retry with the same key: the insert returns no row, the stored answer is read (replay)
+ id 
+----
+(0 rows)
+
+INSERT 0 0
+ response_status |                             response_body                             | same_body 
+-----------------+-----------------------------------------------------------------------+-----------
+             201 | {"id": "90000000-0000-0000-0000-0000000f0001", "status": "requested"} | t
+(1 row)
+
+--- A2 driver lists open requests (rectangle), then accepts with the guarded update
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | 20000000-0000-0000-0000-000000000400
+(1 row)
+
+                  id                  |     pickup_address      
+--------------------------------------+-------------------------
+ 90000000-0000-0000-0000-0000000f0001 | 12 Admiralty Way, Lekki
+(1 row)
+
+      the_drivers_active_vehicle      
+--------------------------------------
+ 30000000-0000-0000-0000-000000000400
+(1 row)
+
+  status  | driver_name_snapshot | vehicle_plate_snapshot 
+----------+----------------------+------------------------
+ assigned | BULK Driver 400      | BLK-400-ZZ
+(1 row)
+
+UPDATE 1
+--- the driver retries the accept: zero rows, then the classification query says "already mine" (state-based replay)
+UPDATE 0
+  status  | assigned_to_the_caller 
+----------+------------------------
+ assigned | t
+(1 row)
+
+--- A3 ping while assigned, then arrived, started, ping, complete (fare comes from the quote, never from the client)
+ ping_stored 
+-------------
+ t
+(1 row)
+
+INSERT 0 1
+ status  
+---------
+ arrived
+(1 row)
+
+UPDATE 1
+ status  | has_started_at 
+---------+----------------
+ started | t
+(1 row)
+
+UPDATE 1
+  status   | fare_amount_minor | fare_currency | distance_m | has_completed_at 
+-----------+-------------------+---------------+------------+------------------
+ completed |            135000 | NGN           |       6820 | t
+(1 row)
+
+UPDATE 1
+--- the rider watches: latest location (only while the trip is in progress; here it is already completed, so the API would answer trip_not_in_progress)
+ in_progress 
+-------------
+ f
+(1 row)
+
+--- A4 pay: the amount comes from the trip, the payment row is created after the provider returned its reference, pending
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+                  id                  |  status   | fare_amount_minor | cancellation_fee_minor 
+--------------------------------------+-----------+-------------------+------------------------
+ 90000000-0000-0000-0000-0000000f0001 | completed |            135000 |                       
+(1 row)
+
+                  id                  | status  | amount_minor 
+--------------------------------------+---------+--------------
+ 90000000-0000-0000-0000-0000000f00a1 | pending |       135000
+(1 row)
+
+INSERT 0 1
+--- the provider webhook: record the event, apply it, mark it processed
+ set_config | set_config 
+------------+------------
+ provider   | 
+(1 row)
+
+ provider_event_id 
+-------------------
+ evt-walk-1
+(1 row)
+
+INSERT 0 1
+                  id                  | status  | amount_minor 
+--------------------------------------+---------+--------------
+ 90000000-0000-0000-0000-0000000f00a1 | pending |       135000
+(1 row)
+
+ provider_reference |  status   
+--------------------+-----------
+ PRV-WALK-1         | succeeded
+(1 row)
+
+UPDATE 1
+ outcome 
+---------
+ applied
+(1 row)
+
+UPDATE 1
+--- the same webhook delivered again: no row, nothing changes
+ provider_event_id 
+-------------------
+(0 rows)
+
+INSERT 0 0
+--- A5 both sides rate (the role decides rater_role, never the body)
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000003000
+(1 row)
+
+ rater_role | stars 
+------------+-------
+ rider      |     5
+(1 row)
+
+INSERT 0 1
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | 20000000-0000-0000-0000-000000000400
+(1 row)
+
+ rater_role | stars 
+------------+-------
+ driver     |     4
+(1 row)
+
+INSERT 0 1
+--- support refunds 35000 kobo (the refund row is written after the provider confirmed RF-WALK-1)
+ set_config |              set_config              
+------------+--------------------------------------
+ support    | dddddddd-0000-0000-0000-000000000001
+(1 row)
+
+ amount_minor | currency 
+--------------+----------
+        35000 | NGN
+(1 row)
+
+INSERT 0 1
+ note_written 
+--------------
+ t
+(1 row)
+
+--- what the status-history endpoint returns for this trip (ORDER BY seq)
+ has_seq |         move         | actor_role 
+---------+----------------------+------------
+ t       | (new) > requested    | rider
+ t       | requested > assigned | driver
+ t       | assigned > arrived   | driver
+ t       | arrived > started    | driver
+ t       | started > completed  | driver
+(5 rows)
+
+ actor_role |    action     | entity_type 
+------------+---------------+-------------
+ support    | dispute_note  | trip
+ provider   | status_change | payment
+(2 rows)
+
+--- the cancel contract: rider cancels an assigned trip (fee 50000), then the replay classification
+RESET
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | aaaaaaaa-0000-0000-0000-000000000004
+(1 row)
+
+  status   | cancelled_by_role | cancellation_fee_minor | cancellation_fee_currency 
+-----------+-------------------+------------------------+---------------------------
+ cancelled | rider             |                  50000 | NGN
+(1 row)
+
+UPDATE 1
+UPDATE 0
+  status   | cancelled_by_the_caller_role 
+-----------+------------------------------
+ cancelled | t
+(1 row)
+
+--- J1 the request timeout job (actor system): cancel up to 3 unaccepted trips older than request_timeout_seconds
+ set_config | set_config 
+------------+------------
+ system     | 
+(1 row)
+
+ request_timeout_seconds 
+-------------------------
+                     600
+(1 row)
+
+  trip  |  status   | cancelled_by_role | cancellation_fee_minor 
+--------+-----------+-------------------+------------------------
+ 000009 | cancelled | system            |                      0
+ 200000 | cancelled | system            |                      0
+ 199999 | cancelled | system            |                      0
+(3 rows)
+
+UPDATE 3
+ actor_role | history_rows_by_system 
+------------+------------------------
+ system     |                      3
+(1 row)
+
+--- J2 the reconciliation job: pending payments older than payment_reconcile_after_seconds (read only)
+                  id                  | provider_reference | status  
+--------------------------------------+--------------------+---------
+ 17a6beac-6f37-476a-8fef-af4f5b9bfcd3 | PRV-T03-A          | pending
+ c1b802a2-51d8-406e-988e-8ea2e3a3dfd7 | BULK-PRV-500       | pending
+ afcb2dcd-bca3-49f1-9c36-69da94423001 | BULK-PRV-1000      | pending
+(3 rows)
+
+--- J3 idempotency cleanup: delete expired rows (an expired row is created inside this transaction to prove the DELETE right)
+INSERT 0 1
+DELETE 1
+ROLLBACK
+ proof_trips_left | proof_keys_left | proof_events_left | trip_10_status 
+------------------+-----------------+-------------------+----------------
+                0 |               0 |                 0 | assigned
+(1 row)
+

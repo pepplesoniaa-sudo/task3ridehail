@@ -1,0 +1,130 @@
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+################################################################
+(a) A2.1 OPEN REQUESTS NEAR THE DRIVER  (the heaviest READ of A1 to A5)
+################################################################
+                                                                             QUERY PLAN                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5169.00..5169.03 rows=12 width=64) (actual time=1.492..1.497 rows=20 loops=1)
+   Buffers: shared hit=1729
+   ->  Sort  (cost=5169.00..5169.03 rows=12 width=64) (actual time=1.491..1.493 rows=20 loops=1)
+         Sort Key: t.created_at
+         Sort Method: quicksort  Memory: 27kB
+         Buffers: shared hit=1729
+         ->  Nested Loop  (cost=2151.06..5168.78 rows=12 width=64) (actual time=1.068..1.434 rows=22 loops=1)
+               Buffers: shared hit=1726
+               ->  Bitmap Heap Scan on trip t  (cost=2150.64..2154.65 rows=407 width=58) (actual time=0.329..0.539 rows=401 loops=1)
+                     Recheck Cond: ((status = ANY ('{requested,assigned,arrived,started}'::text[])) AND (status = 'requested'::text))
+                     Heap Blocks: exact=61
+                     Buffers: shared hit=122
+                     ->  BitmapAnd  (cost=2150.64..2150.64 rows=1 width=0) (actual time=0.311..0.312 rows=0 loops=1)
+                           Buffers: shared hit=61
+                           ->  Bitmap Index Scan on trip_one_active_per_driver  (cost=0.00..811.88 rows=720 width=0) (actual time=0.260..0.260 rows=736 loops=1)
+                                 Buffers: shared hit=57
+                           ->  Bitmap Index Scan on trip_requested_created_at_idx  (cost=0.00..1338.31 rows=407 width=0) (actual time=0.042..0.042 rows=430 loops=1)
+                                 Buffers: shared hit=4
+               ->  Index Scan using fare_quote_pkey on fare_quote q  (cost=0.42..7.41 rows=1 width=38) (actual time=0.002..0.002 rows=0 loops=401)
+                     Index Cond: (id = t.fare_quote_id)
+                     Filter: ((pickup_latitude >= 6.475) AND (pickup_latitude <= 6.495) AND (pickup_longitude >= 3.385) AND (pickup_longitude <= 3.405))
+                     Rows Removed by Filter: 1
+                     Buffers: shared hit=1604
+ Planning:
+   Buffers: shared hit=436
+ Planning Time: 1.544 ms
+ Execution Time: 1.622 ms
+(27 rows)
+
+################################################################
+(b) A1.1 RETRY CHECK ON THE IDEMPOTENCY KEY  (the second heaviest READ of A1 to A5)
+################################################################
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idem_one_key_per_rider_action on idempotency_key  (cost=0.41..8.44 rows=1 width=58) (actual time=0.038..0.039 rows=1 loops=1)
+   Index Cond: ((rider_id = '10000000-0000-0000-0000-000000004001'::uuid) AND (action = 'request_trip'::text) AND (key = 'bulk-1000'::text))
+   Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=54
+ Planning Time: 0.359 ms
+ Execution Time: 0.080 ms
+(7 rows)
+
+################################################################
+(c) EXTRA, LABELLED: A1.3 THE TRIP INSERT  (the heaviest WRITE; includes the trigger work). Rolled back.
+################################################################
+ set_config |              set_config              
+------------+--------------------------------------
+ rider      | 10000000-0000-0000-0000-000000002000
+(1 row)
+
+INSERT 0 1
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Insert on trip  (cost=0.00..0.02 rows=0 width=0) (actual time=3.011..3.012 rows=0 loops=1)
+   Buffers: shared hit=128 read=1 dirtied=1
+   ->  Result  (cost=0.00..0.02 rows=1 width=364) (actual time=0.030..0.030 rows=1 loops=1)
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.064 ms
+ Trigger for constraint trip_rider_id_fkey: time=0.165 calls=1
+ Trigger for constraint trip_driver_id_fkey: time=0.145 calls=1
+ Trigger for constraint trip_vehicle_belongs_to_driver: time=0.034 calls=1
+ Trigger for constraint trip_quote_belongs_to_rider: time=0.114 calls=1
+ Trigger trip_enforce_transition: time=1.928 calls=1
+ Trigger trip_write_history: time=3.262 calls=1
+ Execution Time: 6.763 ms
+(13 rows)
+
+--- the indexes the insert in (c) has to maintain (a plan does not list them): the indexes of trip
+           indexname           
+-------------------------------
+ trip_driver_history_idx
+ trip_fare_quote_id_key
+ trip_one_active_per_driver
+ trip_one_active_per_rider
+ trip_pkey
+ trip_requested_created_at_idx
+ trip_rider_history_idx
+(7 rows)
+
+
+
+################################################################
+ANNOTATIONS (written by hand from the plans above; the plans themselves are the evidence)
+Data: BULK set, 200,012 trips, 401 waiting. Each file section was run twice and the second run is shown. Timings on this machine vary by about 3 times
+between runs (A2.1 measured 1.1 to 3.5 ms, A1.3 7 to 31 ms in earlier runs), so read them as orders of magnitude.
+################################################################
+
+(a) A2.1 open requests near the driver
+  Indexes shown in the plan: trip_requested_created_at_idx (Bitmap Index Scan), trip_one_active_per_driver (Bitmap Index Scan, used inside the BitmapAnd
+  although it is not the index the design planned for this query), fare_quote_pkey (Index Scan, 401 loops).
+  Rows estimated against actual:
+    Bitmap Heap Scan on trip              estimated 407   actual 401
+    Bitmap Index Scan trip_requested_created_at_idx   estimated 407  actual 430
+    Bitmap Index Scan trip_one_active_per_driver      estimated 720  actual 736
+    Nested Loop (the join result)         estimated 12    actual 22
+    Index Scan fare_quote_pkey            estimated 1 per loop, actual 0 per loop on average (the rectangle removes most rows: Rows Removed by Filter 1 per loop)
+    Limit                                 estimated 12    actual 20
+  Seq Scan remaining: none.
+  Execution Time 1.622 ms, 1,729 buffers (all hits).
+  Why chosen: it is the heaviest read of A1 to A5 by measured time, and the only one whose cost grows with rows it does not return (it looks up the quote of
+  every waiting trip before the rectangle can filter), so it will not scale with a large waiting list.
+
+(b) A1.1 retry check on the idempotency key
+  Index shown in the plan: idem_one_key_per_rider_action (Index Scan; it is the unique constraint's own index, not an extra index).
+  Rows estimated against actual: Index Scan estimated 1, actual 1.
+  Seq Scan remaining: none.
+  Execution Time 0.080 ms, 4 buffers.
+  Why chosen: it is the second heaviest read of A1 to A5 by measured time (0.08 to 0.26 ms across runs), but it is still tiny; it is shown because it is the
+  lookup that makes a retried request safe (B6), and it shows an index lookup that touches 4 buffers.
+
+(c) EXTRA, labelled: A1.3 the trip insert
+  Indexes shown in the plan: none. An insert does not read an index. It has to maintain the 7 indexes of trip listed at the end of the output
+  (that list comes from pg_indexes, a plan does not show it).
+  Rows estimated against actual: Insert on trip estimated 0, actual 0 (an insert returns no rows); the Result node feeding it estimated 1, actual 1.
+  Seq Scan remaining: none.
+  Execution Time 6.763 ms, 128 buffers hit, 1 read, 1 dirtied. Trigger time: trip_write_history 3.262 ms, trip_enforce_transition 1.928 ms, the four
+  foreign key checks 0.034 to 0.165 ms each.
+  Why chosen: it is the heaviest statement on every run (about 7 to 31 ms across runs), and almost all of that time is the two triggers, not the write to the table.

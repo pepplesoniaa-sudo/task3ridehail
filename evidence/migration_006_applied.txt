@@ -1,0 +1,97 @@
+##### APPLY 006 (psql -1 -v ON_ERROR_STOP=1)
+CREATE TABLE
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TABLE
+CREATE TRIGGER
+CREATE TABLE
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+GRANT
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+RESET
+REVOKE
+##### SHOW after 006
+                 List of relations
+ Schema |          Name          | Type  |  Owner   
+--------+------------------------+-------+----------
+ public | audit_log              | table | ridehail
+ public | driver                 | table | ridehail
+ public | fare_quote             | table | ridehail
+ public | idempotency_key        | table | ridehail
+ public | location_ping          | table | ridehail
+ public | payment                | table | ridehail
+ public | provider_event         | table | ridehail
+ public | rating                 | table | ridehail
+ public | refund                 | table | ridehail
+ public | rider                  | table | ridehail
+ public | setting                | table | ridehail
+ public | status_transition_rule | table | ridehail
+ public | support_admin          | table | ridehail
+ public | trip                   | table | ridehail
+ public | trip_status_history    | table | ridehail
+ public | vehicle                | table | ridehail
+(16 rows)
+
+       tbl       |            conname            | contype 
+-----------------+-------------------------------+---------
+ rating          | rating_comment_length         | c
+ rating          | rating_one_per_role_per_trip  | u
+ rating          | rating_pkey                   | p
+ rating          | rating_role_valid             | c
+ rating          | rating_stars_range            | c
+ rating          | rating_trip_id_fkey           | f
+ idempotency_key | idem_action_valid             | c
+ idempotency_key | idem_hash_format              | c
+ idempotency_key | idem_key_length               | c
+ idempotency_key | idem_one_key_per_rider_action | u
+ idempotency_key | idem_payment_id_fkey          | f
+ idempotency_key | idem_response_complete        | c
+ idempotency_key | idem_rider_id_fkey            | f
+ idempotency_key | idem_trip_id_fkey             | f
+ idempotency_key | idempotency_key_pkey          | p
+ location_ping   | location_ping_pkey            | p
+ location_ping   | ping_accuracy_not_negative    | c
+ location_ping   | ping_latitude_range           | c
+ location_ping   | ping_longitude_range          | c
+ location_ping   | ping_trip_id_fkey             | f
+(20 rows)
+
+       tbl       |          tgname          
+-----------------+--------------------------
+ rating          | rating_block_change
+ rating          | rating_enforce_rules
+ rating          | rating_update_cache
+ idempotency_key | set_updated_at
+ location_ping   | append_only_guard
+ location_ping   | ping_enforce_trip_status
+(6 rows)
+
+          index_name           |       tbl       
+-------------------------------+-----------------
+ rating_pkey                   | rating
+ rating_one_per_role_per_trip  | rating
+ idempotency_key_pkey          | idempotency_key
+ idem_one_key_per_rider_action | idempotency_key
+ location_ping_pkey            | location_ping
+(5 rows)
+
+##### functions and owners after 006
+   function   |         owner          | security_definer |               config               
+--------------+------------------------+------------------+------------------------------------
+ erase_driver | ridehail_erasure_owner | t                | {"search_path=pg_catalog, public"}
+ erase_rider  | ridehail_erasure_owner | t                | {"search_path=pg_catalog, public"}
+(2 rows)
+
+owner has CREATE on schema public: false
+##### ROW COUNTS after 006
+rating 0
+idempotency_key 0
+location_ping 0

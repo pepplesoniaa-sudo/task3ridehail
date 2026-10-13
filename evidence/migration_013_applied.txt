@@ -1,0 +1,26 @@
+##### APPLY 013 (psql -1 -v ON_ERROR_STOP=1)
+     18 ALTER FUNCTION
+##### SHOW after 013: every function's settings
+          proname           | definer |         owner          |                   config                    
+----------------------------+---------+------------------------+---------------------------------------------
+ add_support_note           | t       | ridehail_writer        | {"search_path=pg_catalog, public, pg_temp"}
+ erase_driver               | t       | ridehail_erasure_owner | {"search_path=pg_catalog, public, pg_temp"}
+ erase_rider                | t       | ridehail_erasure_owner | {"search_path=pg_catalog, public, pg_temp"}
+ payment_write_audit        | t       | ridehail_writer        | {"search_path=pg_catalog, public, pg_temp"}
+ provider_event_write_audit | t       | ridehail_writer        | {"search_path=pg_catalog, public, pg_temp"}
+ setting_write_audit        | t       | ridehail_writer        | {"search_path=pg_catalog, public, pg_temp"}
+ trip_write_history         | t       | ridehail_writer        | {"search_path=pg_catalog, public, pg_temp"}
+ append_only_guard          | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ payment_enforce_rules      | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ ping_enforce_trip_status   | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ provider_event_guard       | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ rating_block_change        | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ rating_enforce_rules       | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ rating_update_cache        | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ refund_enforce_total       | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ set_updated_at             | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ trip_block_delete          | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+ trip_enforce_transition    | f       | ridehail               | {"search_path=pg_catalog, public, pg_temp"}
+(18 rows)
+
+18 of 18 functions end their search_path with pg_temp

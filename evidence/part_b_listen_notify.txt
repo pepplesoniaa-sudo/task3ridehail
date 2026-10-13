@@ -1,0 +1,119 @@
+SET
+      cu      | this_backend_pid 
+--------------+------------------
+ ridehail_app |              257
+(1 row)
+
+=== N5 payload size limit (this session is NOT listening, so nothing is printed): 7999 characters, then 8000
+ ok_7999_returns_void_text 
+---------------------------
+                         0
+(1 row)
+
+ERROR:  payload string too long
+SQLSTATE 22023
+=== N4a a notification sent while nobody listens
+ pg_notify 
+-----------
+ 
+(1 row)
+
+=== (new connection, a new session with a new backend pid)
+You are now connected to database "ridehail_design" as user "ridehail".
+SET
+      cu      | listener_backend_pid 
+--------------+----------------------
+ ridehail_app |                  258
+(1 row)
+
+LISTEN
+=== N4b the notification above is not delivered to a session that starts listening afterwards (expect no "Asynchronous notification" line before the next echo)
+ after_listen_started 
+----------------------
+                    1
+(1 row)
+
+=== N1 sent after LISTEN, committed: delivered, with the payload
+ pg_notify 
+-----------
+ 
+(1 row)
+
+Asynchronous notification "rh_test" with payload "{"trip_id":"40000000-0000-0000-0000-000000198904","seq":930301,"to_status":"completed"}" received from server process with PID 258.
+ next_command_1 
+----------------
+              1
+(1 row)
+
+=== N2 sent inside a transaction that is rolled back: NOT delivered
+BEGIN
+ pg_notify 
+-----------
+ 
+(1 row)
+
+ROLLBACK
+ next_command_2 
+----------------
+              1
+(1 row)
+
+=== N3a two IDENTICAL notifications in one transaction are folded into one
+BEGIN
+ pg_notify 
+-----------
+ 
+(1 row)
+
+ pg_notify 
+-----------
+ 
+(1 row)
+
+COMMIT
+Asynchronous notification "rh_test" with payload "same payload" received from server process with PID 258.
+ next_command_3a 
+-----------------
+               1
+(1 row)
+
+=== N3b two DIFFERENT payloads in one transaction are both delivered, in the order sent
+BEGIN
+ pg_notify 
+-----------
+ 
+(1 row)
+
+ pg_notify 
+-----------
+ 
+(1 row)
+
+COMMIT
+Asynchronous notification "rh_test" with payload "seq 1" received from server process with PID 258.
+Asynchronous notification "rh_test" with payload "seq 2" received from server process with PID 258.
+ next_command_3b 
+-----------------
+               1
+(1 row)
+
+=== N3c notification is held until COMMIT: sent inside an open transaction, delivered only after the commit
+BEGIN
+ pg_notify 
+-----------
+ 
+(1 row)
+
+ inside_open_transaction_nothing_yet 
+-------------------------------------
+                                   1
+(1 row)
+
+COMMIT
+Asynchronous notification "rh_test" with payload "held until commit" received from server process with PID 258.
+ after_commit 
+--------------
+            1
+(1 row)
+
+UNLISTEN

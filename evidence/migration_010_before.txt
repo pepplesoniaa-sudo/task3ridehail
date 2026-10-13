@@ -1,0 +1,66 @@
+##### BEFORE migration 010 (read-only snapshot)
+2026-10-06 20:04:42
+ history_all | history_small_set_12_trips | audit_all | audit_rows_before_bulk_load_small_set | trips  
+-------------+----------------------------+-----------+---------------------------------------+--------
+      932072 |                         41 |    169016 |                                 86505 | 200012
+(1 row)
+
+   grantee    |     table_name      |  privileges   
+--------------+---------------------+---------------
+ ridehail_app | audit_log           | INSERT,SELECT
+ ridehail_app | trip_status_history | INSERT,SELECT
+(2 rows)
+
+          proname           |  owner   | security_definer | config 
+----------------------------+----------+------------------+--------
+ payment_write_audit        | ridehail | f                | 
+ provider_event_write_audit | ridehail | f                | 
+ setting_write_audit        | ridehail | f                | 
+ trip_write_history         | ridehail | f                | 
+(4 rows)
+
+ indexes_total 
+---------------
+            41
+(1 row)
+
+                     roles                      
+------------------------------------------------
+ ridehail, ridehail_app, ridehail_erasure_owner
+(1 row)
+
+ functions_in_public 
+---------------------
+                  17
+(1 row)
+
+                          Table "public.trip_status_history"
+     Column      |           Type           | Collation | Nullable |      Default      
+-----------------+--------------------------+-----------+----------+-------------------
+ id              | uuid                     |           | not null | gen_random_uuid()
+ trip_id         | uuid                     |           | not null | 
+ from_status     | text                     |           |          | 
+ to_status       | text                     |           | not null | 
+ actor_role      | text                     |           | not null | 
+ actor_rider_id  | uuid                     |           |          | 
+ actor_driver_id | uuid                     |           |          | 
+ actor_admin_id  | uuid                     |           |          | 
+ created_at      | timestamp with time zone |           | not null | now()
+ updated_at      | timestamp with time zone |           | not null | now()
+Indexes:
+    "trip_status_history_pkey" PRIMARY KEY, btree (id)
+    "trip_status_history_trip_idx" btree (trip_id, created_at)
+Check constraints:
+    "history_actor_matches_role" CHECK (actor_role = 'rider'::text AND actor_rider_id IS NOT NULL AND actor_driver_id IS NULL AND actor_admin_id IS NULL OR actor_role = 'driver'::text AND actor_driver_id IS NOT NULL AND actor_rider_id IS NULL AND actor_admin_id IS NULL OR actor_role = 'support'::text AND actor_admin_id IS NOT NULL AND actor_rider_id IS NULL AND actor_driver_id IS NULL OR actor_role = 'system'::text AND actor_rider_id IS NULL AND actor_driver_id IS NULL AND actor_admin_id IS NULL)
+    "history_first_row_is_requested" CHECK (from_status IS NOT NULL OR to_status = 'requested'::text)
+    "history_from_status_valid" CHECK (from_status IS NULL OR (from_status = ANY (ARRAY['requested'::text, 'assigned'::text, 'arrived'::text, 'started'::text, 'completed'::text, 'cancelled'::text])))
+ audit_rows_small_set_created_before_18_10_utc 
+-----------------------------------------------
+                                             9
+(1 row)
+
+ audit_rows_in_bulk 
+--------------------
+             169007
+(1 row)
+

@@ -1,0 +1,17 @@
+BEGIN
+SET
+      cu      | session_b_pid 
+--------------+---------------
+ ridehail_app |           304
+(1 row)
+
+SET
+ set_config |              set_config              
+------------+--------------------------------------
+ driver     | bbbbbbbb-0000-0000-0000-000000000004
+(1 row)
+
+ERROR:  canceling statement due to lock timeout
+CONTEXT:  while locking tuple (0,37) in relation "trip"
+SQLSTATE 55P03
+ROLLBACK

@@ -1,0 +1,61 @@
+##### 4a. does anything in db\queries use trip_status_history_trip_idx?
+--- reset the usage counters of the two history indexes (statistics only, no schema change)
+ pg_stat_reset_single_table_counters | pg_stat_reset_single_table_counters 
+-------------------------------------+-------------------------------------
+                                     | 
+(1 row)
+
+           indexrelname           | idx_scan 
+----------------------------------+----------
+ trip_status_history_pkey         |        0
+ trip_status_history_trip_idx     |        0
+ trip_status_history_trip_seq_idx |        0
+(3 rows)
+
+--- run EVERY query file of db\queries that reads trip_status_history, as it is now
+ran a1_a5_queries.sql (exit 0)
+ran plans_all_candidates.sql (exit 0)
+ran plans_partial_and_unused_indexes.sql (exit 0)
+ran proofs_rejected_and_extra.sql (exit 0)
+ran proofs_migration_010.sql (exit 0)
+ran proofs_followup2_a_c.sql (exit 0)
+ran proofs_followup2_b_search_path.sql (exit 0)
+--- usage counters after running them all
+           indexrelname           | idx_scan | idx_tup_read 
+----------------------------------+----------+--------------
+ trip_status_history_pkey         |        0 |            0
+ trip_status_history_trip_idx     |       14 |      5592473
+ trip_status_history_trip_seq_idx |       26 |      2771279
+(3 rows)
+
+--- EXPLAIN of the history query shapes used in db\queries (as ridehail_app)
+SET
+ current_user | session_user 
+--------------+--------------
+ ridehail_app | ridehail
+(1 row)
+
+--- timeline ordered by seq (A3.3)
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Index Scan using trip_status_history_trip_seq_idx on trip_status_history
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000000100'::uuid)
+(2 rows)
+
+--- rows of one trip, no order (the proofs count them)
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Aggregate
+   ->  Index Only Scan using trip_status_history_trip_seq_idx on trip_status_history
+         Index Cond: (trip_id = '40000000-0000-0000-0000-000000000100'::uuid)
+(3 rows)
+
+--- the shape the foreign key history_trip_id_fkey needs (look up rows of one trip)
+ERROR:  permission denied for table trip_status_history
+--- the legacy shape (ORDER BY created_at): no query in dbqueries uses it any more; with the old index present the planner uses it
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Index Scan using trip_status_history_trip_idx on trip_status_history
+   Index Cond: (trip_id = '40000000-0000-0000-0000-000000000100'::uuid)
+(2 rows)
+
